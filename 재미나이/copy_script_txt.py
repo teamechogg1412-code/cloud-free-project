@@ -3,7 +3,7 @@ import os
 # =========================================================
 # 👇 사용자 설정
 # =========================================================
-PROJECT_ROOT = r"C:\Users\isy73\botida-connect-flow_claean"
+PROJECT_ROOT = r"C:\Users\isy73\remix-of-botida-flow"
 OUTPUT_FILE = os.path.join(PROJECT_ROOT, "ai_context_combined.txt")
 LIST_FILE = os.path.join(PROJECT_ROOT, "included_files.txt") # 👈 목록 파일 추가
 

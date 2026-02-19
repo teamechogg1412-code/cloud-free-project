@@ -1,773 +1,327 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState, useCallback } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
 import { Header } from "@/components/landing/Header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Separator } from "@/components/ui/separator";
 import {
-  UserCircle,
-  ArrowLeft,
-  Mail,
-  Phone,
-  Building,
-  Briefcase,
-  Calendar,
-  History,
-  Edit,
-  Plus,
-  Trash2,
-  AlertCircle,
-  Loader2,
-  UserCog,
-  FileText,
-  Ban,
-  UserCheck,
+  ArrowLeft, User, Building2, CreditCard, FileText,
+  Mail, Phone, Shield, PenTool, GitBranch,
+  ClipboardList, Heart, ExternalLink, Car, Loader2,
+  MapPin, Briefcase, Globe
 } from "lucide-react";
-import { useNavigate, useParams } from "react-router-dom";
-import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/integrations/supabase/client";
-import { toast } from "@/hooks/use-toast";
-import { format } from "date-fns";
-import { ko } from "date-fns/locale";
 
-interface Profile {
-  id: string;
-  email: string;
-  full_name: string | null;
-  avatar_url: string | null;
-  phone: string | null;
-}
+// 마이페이지에서 사용하는 하위 컴포넌트 임포트
+import { MyVehicleTab } from "@/components/mypage/MyVehicleTab";
+import { MailIntegrationTab } from "@/components/mypage/MailIntegrationTab";
+import { toast } from "sonner";
 
-interface Membership {
-  id: string;
-  user_id: string;
-  tenant_id: string;
-  role: "company_admin" | "manager" | "employee";
-  department: string | null;
-  job_title: string | null;
-  created_at: string;
-  is_suspended: boolean;
-  suspended_at: string | null;
-  suspended_by: string | null;
-  suspension_reason: string | null;
-}
-
-interface HRRecord {
-  id: string;
-  tenant_id: string;
-  user_id: string;
-  record_type: string;
-  title: string;
-  description: string | null;
-  effective_date: string;
-  old_department: string | null;
-  new_department: string | null;
-  old_job_title: string | null;
-  new_job_title: string | null;
-  old_role: string | null;
-  new_role: string | null;
-  created_at: string;
-  created_by: string | null;
-}
-
-interface Department {
-  id: string;
-  name: string;
-}
-
-interface JobTitle {
-  id: string;
-  name: string;
-}
-
-const recordTypeLabels: Record<string, { label: string; color: string }> = {
-  hire: { label: "입사", color: "bg-emerald-500" },
-  promotion: { label: "승진", color: "bg-blue-500" },
-  transfer: { label: "부서 이동", color: "bg-violet-500" },
-  leave: { label: "휴직", color: "bg-amber-500" },
-  return: { label: "복직", color: "bg-teal-500" },
-  resignation: { label: "퇴사", color: "bg-red-500" },
-  suspension: { label: "정지", color: "bg-red-600" },
-  reactivation: { label: "복원", color: "bg-green-500" },
-  note: { label: "기타", color: "bg-slate-500" },
-};
-
-const roleLabels: Record<string, string> = {
-  company_admin: "관리자",
+const roleLabel: Record<string, string> = {
+  company_admin: "대표 관리자",
   manager: "매니저",
   employee: "직원",
 };
 
+const recordTypeLabel: Record<string, string> = {
+  promotion: "승진",
+  transfer: "부서이동",
+  role_change: "역할변경",
+  note: "메모",
+  join: "입사",
+  leave: "퇴사",
+  hire: "신규채용"
+};
+
 const MemberDetail = () => {
   const navigate = useNavigate();
-  const { id: memberId } = useParams<{ id: string }>();
-  const { currentTenant, isCompanyAdmin, user } = useAuth();
-
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [membership, setMembership] = useState<Membership | null>(null);
-  const [hrRecords, setHRRecords] = useState<HRRecord[]>([]);
-  const [departments, setDepartments] = useState<Department[]>([]);
-  const [jobTitles, setJobTitles] = useState<JobTitle[]>([]);
+  const { id: memberId } = useParams<{ id: string }>(); 
+  const { currentTenant, isCompanyAdmin } = useAuth();
+  
+  const [profile, setProfile] = useState<any>(null);
+  const [membership, setMembership] = useState<any>(null);
+  const [hrRecords, setHrRecords] = useState<any[]>([]);
+  const [cards, setCards] = useState<any[]>([]);
+  const [approvalLines, setApprovalLines] = useState<any[]>([]);
+  const [employeeDetail, setEmployeeDetail] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
-  // Edit membership dialog
-  const [editMembershipDialog, setEditMembershipDialog] = useState(false);
-  const [editForm, setEditForm] = useState({
-    department: "",
-    job_title: "",
-    role: "employee" as "company_admin" | "manager" | "employee",
-  });
+  // 데이터 로드 함수를 useCallback으로 감싸 정의 (호출 순서 에러 방지)
+  const fetchAllData = useCallback(async () => {
+    if (!currentTenant || !memberId) return;
 
-  // Add HR record dialog
-  const [addRecordDialog, setAddRecordDialog] = useState(false);
-  const [recordForm, setRecordForm] = useState({
-    record_type: "note",
-    title: "",
-    description: "",
-    effective_date: format(new Date(), "yyyy-MM-dd"),
-  });
+    setLoading(true);
+    try {
+      const [profRes, membRes, hrRes, cardRes, approvalRes, detailRes] = await Promise.all([
+        supabase.from("profiles").select("*").eq("id", memberId).single(),
+        supabase.from("tenant_memberships").select("*").eq("tenant_id", currentTenant.tenant_id).eq("user_id", memberId).single(),
+        supabase.from("hr_records").select("*").eq("user_id", memberId).order("effective_date", { ascending: false }),
+        supabase.from("corporate_cards").select("*").eq("holder_user_id", memberId),
+        supabase.from("approval_lines").select("*, approver:approver_user_id(full_name)").eq("user_id", memberId).order("step_order", { ascending: true }),
+        supabase.from("employee_details").select("*").eq("user_id", memberId).maybeSingle(),
+      ]);
 
-  // Fetch member data
+      if (profRes.data) setProfile(profRes.data);
+      if (membRes.data) setMembership(membRes.data);
+      if (hrRes.data) setHrRecords(hrRes.data);
+      if (cardRes.data) setCards(cardRes.data);
+      if (approvalRes.data) setApprovalLines(approvalRes.data);
+      if (detailRes.data) setEmployeeDetail(detailRes.data);
+
+    } catch (e) {
+      console.error(e);
+      toast.error("데이터 로드 중 오류가 발생했습니다.");
+    } finally {
+      setLoading(false);
+    }
+  }, [currentTenant, memberId]);
+
   useEffect(() => {
-    const fetchData = async () => {
-      if (!currentTenant?.tenant_id || !memberId) return;
+    fetchAllData();
+  }, [fetchAllData]);
 
-      setLoading(true);
-      try {
-        // Fetch membership
-        const { data: membershipData, error: membershipError } = await supabase
-          .from("tenant_memberships")
-          .select("*")
-          .eq("tenant_id", currentTenant.tenant_id)
-          .eq("user_id", memberId) // <--- "id"를 "user_id"로 변경
-          .single();
-
-        if (membershipError) throw membershipError;
-        setMembership(membershipData);
-
-        // 2. 프로필 정보 가져오기 (이건 그대로 둠)
-        const { data: profileData, error: profileError } = await supabase
-          .from("profiles")
-          .select("*")
-          .eq("id", memberId) // memberId가 user_id이므로 정상 작동함
-          .single();
-
-        if (profileError) throw profileError;
-        setProfile(profileData);
-
-        // Fetch HR records
-        const { data: recordsData } = await supabase
-          .from("hr_records")
-          .select("*")
-          .eq("tenant_id", currentTenant.tenant_id)
-          .eq("user_id", memberId)
-          .order("effective_date", { ascending: false });
-
-        setHRRecords(recordsData || []);
-
-        // Fetch departments
-        const { data: deptData } = await supabase
-          .from("departments")
-          .select("id, name")
-          .eq("tenant_id", currentTenant.tenant_id)
-          .eq("is_active", true)
-          .order("name");
-
-        setDepartments(deptData || []);
-
-        // Fetch job titles
-        const { data: titleData } = await supabase
-          .from("job_titles")
-          .select("id, name")
-          .eq("tenant_id", currentTenant.tenant_id)
-          .eq("is_active", true)
-          .order("level");
-
-        setJobTitles(titleData || []);
-      } catch (error) {
-        console.error(error);
-        toast({ title: "직원 정보 조회 실패", variant: "destructive" });
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-  }, [currentTenant?.tenant_id, memberId]);
-
-  const openEditMembership = () => {
-    if (!membership) return;
-    setEditForm({
-      department: membership.department || "",
-      job_title: membership.job_title || "",
-      role: membership.role,
-    });
-    setEditMembershipDialog(true);
+  const maskCardNumber = (num: string) => {
+    if (num.length <= 4) return num;
+    return "●●●● ●●●● ●●●● " + num.slice(-4);
   };
 
-  const handleUpdateMembership = async () => {
-    if (!membership || !currentTenant?.tenant_id) return;
-
-    const oldDept = membership.department;
-    const oldTitle = membership.job_title;
-    const oldRole = membership.role;
-
-    try {
-      // Update membership
-      const { error } = await supabase
-        .from("tenant_memberships")
-        .update({
-          department: editForm.department || null,
-          job_title: editForm.job_title || null,
-          role: editForm.role,
-        })
-        .eq("id", membership.id);
-
-      if (error) throw error;
-
-      // Create HR record for the change
-      const changes: string[] = [];
-      if (oldDept !== editForm.department) {
-        changes.push(`부서: ${oldDept || "없음"} → ${editForm.department || "없음"}`);
-      }
-      if (oldTitle !== editForm.job_title) {
-        changes.push(`직급: ${oldTitle || "없음"} → ${editForm.job_title || "없음"}`);
-      }
-      if (oldRole !== editForm.role) {
-        changes.push(`권한: ${roleLabels[oldRole]} → ${roleLabels[editForm.role]}`);
-      }
-
-      if (changes.length > 0) {
-        await supabase.from("hr_records").insert({
-          tenant_id: currentTenant.tenant_id,
-          user_id: memberId,
-          record_type: oldDept !== editForm.department ? "transfer" : "promotion",
-          title: "인사 정보 변경",
-          description: changes.join("\n"),
-          effective_date: new Date().toISOString().split("T")[0],
-          old_department: oldDept,
-          new_department: editForm.department || null,
-          old_job_title: oldTitle,
-          new_job_title: editForm.job_title || null,
-          old_role: oldRole,
-          new_role: editForm.role,
-          created_by: user?.id,
-        });
-      }
-
-      // Refresh data
-      setMembership({
-        ...membership,
-        department: editForm.department || null,
-        job_title: editForm.job_title || null,
-        role: editForm.role,
-      });
-
-      const { data: refreshedRecords } = await supabase
-        .from("hr_records")
-        .select("*")
-        .eq("tenant_id", currentTenant.tenant_id)
-        .eq("user_id", memberId)
-        .order("effective_date", { ascending: false });
-
-      setHRRecords(refreshedRecords || []);
-      setEditMembershipDialog(false);
-      toast({ title: "인사 정보가 수정되었습니다" });
-    } catch (error) {
-      console.error(error);
-      toast({ title: "수정 실패", variant: "destructive" });
-    }
+  const maskResident = (num: string | null) => {
+    if (!num) return "-";
+    return num.replace(/(.{6}).+/, "$1-*******");
   };
 
-  const handleAddRecord = async () => {
-    if (!currentTenant?.tenant_id || !memberId) return;
+  const InfoRow = ({ label, value }: { label: string; value: any }) => (
+    <div className="flex justify-between items-start py-2.5 border-b border-border/50 last:border-0">
+      <span className="text-xs font-semibold text-muted-foreground w-28 shrink-0 uppercase">{label}</span>
+      <span className="text-sm font-medium text-slate-700 text-right">{value || "-"}</span>
+    </div>
+  );
 
-    try {
-      const { error } = await supabase.from("hr_records").insert({
-        tenant_id: currentTenant.tenant_id,
-        user_id: memberId,
-        record_type: recordForm.record_type,
-        title: recordForm.title,
-        description: recordForm.description || null,
-        effective_date: recordForm.effective_date,
-        created_by: user?.id,
-      });
-
-      if (error) throw error;
-
-      // Refresh records
-      const { data: refreshedRecords } = await supabase
-        .from("hr_records")
-        .select("*")
-        .eq("tenant_id", currentTenant.tenant_id)
-        .eq("user_id", memberId)
-        .order("effective_date", { ascending: false });
-
-      setHRRecords(refreshedRecords || []);
-      setAddRecordDialog(false);
-      setRecordForm({
-        record_type: "note",
-        title: "",
-        description: "",
-        effective_date: format(new Date(), "yyyy-MM-dd"),
-      });
-      toast({ title: "인사 기록이 추가되었습니다" });
-    } catch (error) {
-      console.error(error);
-      toast({ title: "추가 실패", variant: "destructive" });
-    }
-  };
-
-  const handleDeleteRecord = async (recordId: string) => {
-    if (!confirm("이 인사 기록을 삭제하시겠습니까?")) return;
-
-    try {
-      const { error } = await supabase.from("hr_records").delete().eq("id", recordId);
-      if (error) throw error;
-
-      setHRRecords(hrRecords.filter((r) => r.id !== recordId));
-      toast({ title: "인사 기록이 삭제되었습니다" });
-    } catch (error) {
-      console.error(error);
-      toast({ title: "삭제 실패", variant: "destructive" });
-    }
-  };
-
-  const handleToggleSuspension = async () => {
-    if (!membership || !currentTenant?.tenant_id || !memberId) return;
-
-    const isSuspending = !membership.is_suspended;
-    const confirmMsg = isSuspending
-      ? "이 직원의 계정을 정지하시겠습니까? 정지된 직원은 시스템에 접근할 수 없습니다."
-      : "이 직원의 계정을 재활성화하시겠습니까?";
-
-    if (!confirm(confirmMsg)) return;
-
-    try {
-      const { error } = await supabase
-        .from("tenant_memberships")
-        .update({
-          is_suspended: isSuspending,
-          suspended_at: isSuspending ? new Date().toISOString() : null,
-          suspended_by: isSuspending ? user?.id : null,
-          suspension_reason: null,
-        })
-        .eq("id", membership.id);
-
-      if (error) throw error;
-
-      // HR 기록 남기기
-      await supabase.from("hr_records").insert({
-        tenant_id: currentTenant.tenant_id,
-        user_id: memberId,
-        record_type: isSuspending ? "suspension" : "reactivation",
-        title: isSuspending ? "계정 정지" : "계정 재활성화",
-        description: isSuspending
-          ? `관리자에 의해 계정이 정지되었습니다.`
-          : `관리자에 의해 계정이 재활성화되었습니다.`,
-        effective_date: new Date().toISOString().split("T")[0],
-        created_by: user?.id,
-      });
-
-      setMembership({
-        ...membership,
-        is_suspended: isSuspending,
-        suspended_at: isSuspending ? new Date().toISOString() : null,
-        suspended_by: isSuspending ? user?.id || null : null,
-      });
-
-      // Refresh HR records
-      const { data: refreshedRecords } = await supabase
-        .from("hr_records")
-        .select("*")
-        .eq("tenant_id", currentTenant.tenant_id)
-        .eq("user_id", memberId)
-        .order("effective_date", { ascending: false });
-
-      setHRRecords(refreshedRecords || []);
-      toast({
-        title: isSuspending ? "계정이 정지되었습니다" : "계정이 재활성화되었습니다",
-      });
-    } catch (error) {
-      console.error(error);
-      toast({ title: "처리 실패", variant: "destructive" });
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
-      </div>
-    );
-  }
-
-  if (!profile || !membership) {
-    return (
-      <div className="min-h-screen bg-slate-50">
-        <Header />
-        <main className="pt-28 pb-16 px-6 max-w-4xl mx-auto text-center">
-          <AlertCircle className="w-16 h-16 text-red-400 mx-auto mb-4" />
-          <h1 className="text-2xl font-bold text-slate-800">직원을 찾을 수 없습니다</h1>
-          <Button className="mt-6" onClick={() => navigate("/admin/hr")}>
-            인사 관리로 돌아가기
-          </Button>
-        </main>
-      </div>
-    );
-  }
+  if (!isCompanyAdmin) return <div className="p-20 text-center font-bold text-slate-400">관리자 권한이 필요합니다.</div>;
+  if (loading) return <div className="flex h-screen items-center justify-center"><Loader2 className="animate-spin text-primary w-10 h-10" /></div>;
+  if (!profile) return <div className="p-20 text-center">직원 정보를 찾을 수 없습니다.</div>;
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-[#F8FAFC]">
       <Header />
-      <main className="pt-28 pb-16 px-6 max-w-6xl mx-auto">
+      <main className="pt-28 pb-16 px-4 max-w-5xl mx-auto animate-in fade-in duration-500">
+        
+        {/* 상단 헤더 및 프로필 요약 */}
         <div className="flex items-center gap-4 mb-8">
-          <Button variant="ghost" size="icon" onClick={() => navigate("/admin/hr")}>
+          <Button variant="ghost" size="icon" onClick={() => navigate("/admin/hr")} className="bg-white border shadow-sm rounded-xl">
             <ArrowLeft className="w-5 h-5" />
           </Button>
           <div>
-            <h1 className="text-3xl font-bold flex items-center gap-3">
-              <UserCircle className="w-8 h-8 text-primary" /> 직원 상세 정보
-            </h1>
-            <p className="text-muted-foreground mt-1">인사 기록 및 부서 배정 관리</p>
+            <h1 className="text-2xl font-black text-slate-900 tracking-tight">직원 마스터 프로필</h1>
+            <p className="text-slate-500 text-xs font-bold uppercase tracking-widest">Employee Data Central</p>
           </div>
         </div>
 
-        {/* Profile Header Card */}
-        <Card className="border-none shadow-lg mb-6">
-          <CardContent className="p-6">
-            <div className="flex flex-col md:flex-row items-start gap-6">
-              <Avatar className="w-24 h-24">
-                <AvatarImage src={profile.avatar_url || undefined} />
-                <AvatarFallback className="text-2xl bg-primary/10 text-primary">
-                  {profile.full_name?.charAt(0) || profile.email.charAt(0).toUpperCase()}
-                </AvatarFallback>
+        <Card className="mb-8 border-none shadow-xl rounded-[2rem] overflow-hidden">
+          <div className="bg-slate-900 p-8 text-white">
+            <div className="flex flex-col md:flex-row items-center gap-8">
+              <Avatar className="w-24 h-24 border-4 border-white/10 shadow-2xl">
+                <AvatarImage src={profile.avatar_url || ""} />
+                <AvatarFallback className="bg-primary/20 text-2xl font-bold">{profile.full_name?.charAt(0)}</AvatarFallback>
               </Avatar>
-
-              <div className="flex-1">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <h2 className="text-2xl font-bold">{profile.full_name || "이름 없음"}</h2>
-                    <div className="flex items-center gap-2 mt-2">
-                      <Badge
-                        className={`${
-                          membership.role === "company_admin"
-                            ? "bg-violet-500"
-                            : membership.role === "manager"
-                              ? "bg-blue-500"
-                              : "bg-slate-500"
-                        }`}
-                      >
-                        {roleLabels[membership.role]}
-                      </Badge>
-                      {membership.is_suspended && (
-                        <Badge className="bg-red-600">정지됨</Badge>
-                      )}
-                      {membership.department && <Badge variant="outline">{membership.department}</Badge>}
-                      {membership.job_title && <Badge variant="secondary">{membership.job_title}</Badge>}
-                    </div>
-                  </div>
-                  {isCompanyAdmin && (
-                    <div className="flex gap-2">
-                      <Button onClick={openEditMembership} size="sm" variant="outline">
-                        <Edit className="w-4 h-4 mr-2" /> 수정
-                      </Button>
-                      <Button
-                        onClick={handleToggleSuspension}
-                        size="sm"
-                        variant={membership.is_suspended ? "default" : "destructive"}
-                      >
-                        {membership.is_suspended ? (
-                          <><UserCheck className="w-4 h-4 mr-2" /> 재활성화</>
-                        ) : (
-                          <><Ban className="w-4 h-4 mr-2" /> 정지</>
-                        )}
-                      </Button>
-                    </div>
-                  )}
+              <div className="flex-1 text-center md:text-left">
+                <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 mb-3">
+                  <h2 className="text-4xl font-black">{profile.full_name}</h2>
+                  <Badge variant="secondary" className="bg-white/10 text-white border-none font-bold">
+                    {roleLabel[membership?.role] || "구성원"}
+                  </Badge>
+                  {membership?.is_suspended && <Badge variant="destructive">정지됨</Badge>}
                 </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
-                  <div className="flex items-center gap-2 text-sm">
-                    <Mail className="w-4 h-4 text-muted-foreground" />
-                    <span>{profile.email}</span>
-                  </div>
-                  {profile.phone && (
-                    <div className="flex items-center gap-2 text-sm">
-                      <Phone className="w-4 h-4 text-muted-foreground" />
-                      <span>{profile.phone}</span>
-                    </div>
-                  )}
-                  <div className="flex items-center gap-2 text-sm">
-                    <Calendar className="w-4 h-4 text-muted-foreground" />
-                    <span>입사: {format(new Date(membership.created_at), "yyyy.MM.dd", { locale: ko })}</span>
-                  </div>
+                <div className="flex flex-wrap justify-center md:justify-start gap-5 text-sm text-white/60 font-medium">
+                  <span className="flex items-center gap-1.5"><Mail size={16} className="text-blue-400" /> {profile.email}</span>
+                  <span className="flex items-center gap-1.5"><Building2 size={16} className="text-emerald-400" /> {membership?.department || "부서 미지정"}</span>
+                  <span className="flex items-center gap-1.5"><Briefcase size={16} className="text-orange-400" /> {membership?.job_title || "직급 미지정"}</span>
                 </div>
               </div>
             </div>
-          </CardContent>
+          </div>
         </Card>
 
-        {/* Tabs for different sections */}
-        <Tabs defaultValue="hr-records" className="space-y-4">
-          <TabsList>
-            <TabsTrigger value="hr-records">
-              <History className="w-4 h-4 mr-2" /> 인사 기록
-            </TabsTrigger>
-            <TabsTrigger value="info">
-              <FileText className="w-4 h-4 mr-2" /> 기본 정보
-            </TabsTrigger>
+        {/* 메인 탭 영역 (마이페이지 구성 복제) */}
+        <Tabs defaultValue="details" className="space-y-6">
+          <TabsList className="w-full justify-start h-12 p-1 bg-white border shadow-sm rounded-2xl gap-1">
+            <TabsTrigger value="details" className="rounded-xl px-5 font-bold gap-2"><ClipboardList size={16}/> 인사카드</TabsTrigger>
+            <TabsTrigger value="hr" className="rounded-xl px-5 font-bold gap-2"><FileText size={16}/> 인사기록</TabsTrigger>
+            <TabsTrigger value="cards" className="rounded-xl px-5 font-bold gap-2"><CreditCard size={16}/> 법인카드</TabsTrigger>
+            <TabsTrigger value="approval" className="rounded-xl px-5 font-bold gap-2"><GitBranch size={16}/> 결제라인</TabsTrigger>
+            <TabsTrigger value="signature" className="rounded-xl px-5 font-bold gap-2"><PenTool size={16}/> 서명</TabsTrigger>
+            <TabsTrigger value="vehicle" className="rounded-xl px-5 font-bold gap-2"><Car size={16}/> 차량관리</TabsTrigger>
+            <TabsTrigger value="mail" className="rounded-xl px-5 font-bold gap-2"><Mail size={16}/> 메일연동</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="hr-records">
-            <Card className="border-none shadow-lg">
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle className="flex items-center gap-2">
-                  <History className="w-5 h-5" /> 인사 이력
-                </CardTitle>
-                {isCompanyAdmin && (
-                  <Button onClick={() => setAddRecordDialog(true)} size="sm">
-                    <Plus className="w-4 h-4 mr-2" /> 기록 추가
-                  </Button>
-                )}
-              </CardHeader>
-              <CardContent>
-                {hrRecords.length === 0 ? (
-                  <div className="text-center py-12 text-muted-foreground">인사 기록이 없습니다</div>
-                ) : (
-                  <div className="relative">
-                    {/* Timeline line */}
-                    <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-border" />
+          {/* 1. 인사카드 탭 */}
+          <TabsContent value="details" className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <Card className="border-none shadow-md rounded-2xl">
+                <CardHeader className="pb-3"><CardTitle className="text-sm font-black text-blue-600 uppercase">기본 및 연락처</CardTitle></CardHeader>
+                <CardContent>
+                  <InfoRow label="입사일" value={employeeDetail?.hire_date} />
+                  <InfoRow label="주민등록번호" value={maskResident(employeeDetail?.resident_number)} />
+                  <InfoRow label="휴대폰" value={employeeDetail?.phone_mobile || profile.phone} />
+                  <InfoRow label="이메일" value={employeeDetail?.email || profile.email} />
+                  <InfoRow label="거주 주소" value={employeeDetail?.address} />
+                  <InfoRow label="국적" value={employeeDetail?.nationality} />
+                </CardContent>
+              </Card>
 
-                    <div className="space-y-6">
-                      {hrRecords.map((record) => {
-                        const typeInfo = recordTypeLabels[record.record_type] || recordTypeLabels.note;
-                        return (
-                          <div key={record.id} className="relative pl-10">
-                            {/* Timeline dot */}
-                            <div
-                              className={`absolute left-2 w-5 h-5 rounded-full ${typeInfo.color} flex items-center justify-center`}
-                            >
-                              <div className="w-2 h-2 bg-white rounded-full" />
-                            </div>
+              <Card className="border-none shadow-md rounded-2xl">
+                <CardHeader className="pb-3"><CardTitle className="text-sm font-black text-emerald-600 uppercase">급여 계좌 정보</CardTitle></CardHeader>
+                <CardContent>
+                  <InfoRow label="거래 은행" value={employeeDetail?.bank_name} />
+                  <InfoRow label="계좌 번호" value={employeeDetail?.account_number} />
+                  <InfoRow label="예금주" value={employeeDetail?.account_holder} />
+                </CardContent>
+              </Card>
 
-                            <Card className="bg-muted/30">
-                              <CardContent className="p-4">
-                                <div className="flex items-start justify-between">
-                                  <div>
-                                    <div className="flex items-center gap-2 mb-1">
-                                      <Badge className={typeInfo.color}>{typeInfo.label}</Badge>
-                                      <span className="text-sm text-muted-foreground">
-                                        {format(new Date(record.effective_date), "yyyy.MM.dd", { locale: ko })}
-                                      </span>
-                                    </div>
-                                    <h4 className="font-semibold">{record.title}</h4>
-                                    {record.description && (
-                                      <p className="text-sm text-muted-foreground mt-1 whitespace-pre-line">
-                                        {record.description}
-                                      </p>
-                                    )}
-                                  </div>
-                                  {isCompanyAdmin && (
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      className="text-destructive hover:text-destructive"
-                                      onClick={() => handleDeleteRecord(record.id)}
-                                    >
-                                      <Trash2 className="w-4 h-4" />
-                                    </Button>
-                                  )}
-                                </div>
-                              </CardContent>
-                            </Card>
-                          </div>
-                        );
-                      })}
-                    </div>
+              <Card className="md:col-span-2 border-none shadow-md rounded-2xl">
+                <CardHeader className="pb-3"><CardTitle className="text-sm font-black text-rose-600 uppercase flex items-center gap-2"><Heart size={16}/> 비상 연락처</CardTitle></CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    {employeeDetail?.emergency_contacts?.map((c: any, i: number) => (
+                      <div key={i} className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                        <p className="text-[10px] font-black text-slate-400 uppercase mb-1">{c.relation}</p>
+                        <p className="font-bold text-slate-800">{c.name}</p>
+                        <p className="text-xs text-blue-600 font-medium">{c.phone}</p>
+                      </div>
+                    )) || <p className="text-sm text-slate-400 py-4 italic">등록된 비상연락처가 없습니다.</p>}
                   </div>
-                )}
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+
+          {/* 2. 인사기록 탭 */}
+          <TabsContent value="hr">
+            <Card className="border-none shadow-md rounded-2xl overflow-hidden">
+              <Table>
+                <TableHeader className="bg-slate-50">
+                  <TableRow>
+                    <TableHead className="w-24 text-[10px] font-black uppercase">유형</TableHead>
+                    <TableHead className="text-[10px] font-black uppercase">제목</TableHead>
+                    <TableHead className="w-32 text-[10px] font-black uppercase">발효일</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {hrRecords.map((r) => (
+                    <TableRow key={r.id}>
+                      <TableCell><Badge variant="outline" className="text-[10px]">{recordTypeLabel[r.record_type] || r.record_type}</Badge></TableCell>
+                      <TableCell className="font-bold text-slate-700">{r.title}</TableCell>
+                      <TableCell className="text-xs text-slate-400 font-mono">{r.effective_date}</TableCell>
+                    </TableRow>
+                  ))}
+                  {hrRecords.length === 0 && <TableRow><TableCell colSpan={3} className="text-center py-20 text-slate-400">인사 기록이 존재하지 않습니다.</TableCell></TableRow>}
+                </TableBody>
+              </Table>
+            </Card>
+          </TabsContent>
+
+          {/* 3. 법인카드 탭 */}
+          <TabsContent value="cards">
+            <div className="grid gap-6 sm:grid-cols-2">
+              {cards.map((card) => (
+                <Card key={card.id} className="border-none shadow-lg bg-slate-900 text-white rounded-3xl overflow-hidden">
+                  <CardContent className="p-6">
+                    <div className="flex justify-between items-start mb-8">
+                      <div>
+                        <p className="text-[10px] font-black opacity-40 uppercase tracking-widest">{card.card_company || "CORPORATE CARD"}</p>
+                        <h4 className="text-lg font-bold">{card.card_name}</h4>
+                      </div>
+                      <Badge className={card.is_active ? "bg-blue-600" : "bg-slate-700"}>{card.is_active ? "사용중" : "정지"}</Badge>
+                    </div>
+                    <p className="text-2xl font-mono tracking-[0.2em] mb-4 text-center">{maskCardNumber(card.card_number)}</p>
+                    <div className="flex justify-between items-end opacity-60">
+                      <p className="text-xs font-bold">{profile.full_name}</p>
+                      <p className="text-[10px] font-mono">{card.expiry_date || "00/00"}</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+              {cards.length === 0 && <p className="col-span-full text-center py-20 text-slate-400">배정된 법인카드가 없습니다.</p>}
+            </div>
+          </TabsContent>
+
+          {/* 4. 결제라인 탭 */}
+          <TabsContent value="approval">
+            <Card className="border-none shadow-md rounded-2xl">
+              <CardHeader><CardTitle className="text-base font-black">설정된 개인 결제라인</CardTitle></CardHeader>
+              <CardContent className="space-y-4">
+                {approvalLines.map((line) => (
+                  <div key={line.id} className="flex items-center gap-5 p-5 rounded-2xl bg-slate-50 border border-slate-100">
+                    <div className="w-10 h-10 rounded-full bg-slate-900 text-white flex items-center justify-center font-black text-xs">{line.step_order}</div>
+                    <div className="flex-1">
+                      <p className="font-bold text-slate-800">{line.approver?.full_name}</p>
+                      <p className="text-[11px] text-slate-400 font-bold uppercase tracking-tighter">Approval Step {line.step_order}</p>
+                    </div>
+                    <Badge variant="outline" className="text-xs">승인자</Badge>
+                  </div>
+                ))}
+                {approvalLines.length === 0 && <p className="text-center py-10 text-slate-400">결제라인이 설정되지 않았습니다.</p>}
               </CardContent>
             </Card>
           </TabsContent>
 
-          <TabsContent value="info">
-            <Card className="border-none shadow-lg">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <UserCog className="w-5 h-5" /> 기본 정보
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-4">
-                    <div>
-                      <Label className="text-muted-foreground">이름</Label>
-                      <p className="font-medium">{profile.full_name || "-"}</p>
-                    </div>
-                    <div>
-                      <Label className="text-muted-foreground">이메일</Label>
-                      <p className="font-medium">{profile.email}</p>
-                    </div>
-                    <div>
-                      <Label className="text-muted-foreground">연락처</Label>
-                      <p className="font-medium">{profile.phone || "-"}</p>
-                    </div>
-                  </div>
-                  <div className="space-y-4">
-                    <div>
-                      <Label className="text-muted-foreground">부서</Label>
-                      <p className="font-medium">{membership.department || "-"}</p>
-                    </div>
-                    <div>
-                      <Label className="text-muted-foreground">직급</Label>
-                      <p className="font-medium">{membership.job_title || "-"}</p>
-                    </div>
-                    <div>
-                      <Label className="text-muted-foreground">권한</Label>
-                      <p className="font-medium">{roleLabels[membership.role]}</p>
-                    </div>
-                  </div>
+          {/* 5. 서명 탭 */}
+          <TabsContent value="signature">
+            <Card className="border-none shadow-md rounded-2xl">
+              <CardHeader><CardTitle className="text-base font-black">직원 전자 서명</CardTitle></CardHeader>
+              <CardContent className="flex justify-center p-12 bg-white rounded-[2rem] m-4 border-2 border-dashed border-slate-100">
+                {profile.signature_url ? (
+                  <img src={profile.signature_url} alt="Signature" className="max-h-40 object-contain contrast-125" />
+                ) : <p className="text-slate-300 font-bold italic">등록된 서명 정보가 없습니다.</p>}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* 6. 차량관리 (컴포넌트 재사용) */}
+          <TabsContent value="vehicle">
+            {currentTenant && <MyVehicleTab userId={memberId} tenantId={currentTenant.tenant_id} />}
+          </TabsContent>
+
+          {/* 7. 메일연동 (컴포넌트 재사용) */}
+          <TabsContent value="mail">
+            {currentTenant && <MailIntegrationTab userId={memberId} tenantId={currentTenant.tenant_id} />}
+          </TabsContent>
+
+          {/* 8. 증빙서류 (Direct Access) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-8">
+            <Card className="border-none shadow-sm rounded-2xl p-5 bg-blue-50/50 border border-blue-100">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-blue-600 text-white rounded-lg"><FileText size={18}/></div>
+                  <span className="font-bold text-blue-900">신분증 사본</span>
                 </div>
-              </CardContent>
+                {employeeDetail?.id_card_url ? (
+                  <Button size="sm" variant="outline" className="bg-white" onClick={() => window.open(employeeDetail.id_card_url)}>
+                    <ExternalLink size={14} className="mr-1.5"/> 열기
+                  </Button>
+                ) : <Badge variant="secondary" className="opacity-50">미등록</Badge>}
+              </div>
             </Card>
-          </TabsContent>
+            <Card className="border-none shadow-sm rounded-2xl p-5 bg-emerald-50/50 border border-emerald-100">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-emerald-600 text-white rounded-lg"><Building2 size={18}/></div>
+                  <span className="font-bold text-emerald-900">통장 사본</span>
+                </div>
+                {employeeDetail?.bankbook_url ? (
+                  <Button size="sm" variant="outline" className="bg-white" onClick={() => window.open(employeeDetail.bankbook_url)}>
+                    <ExternalLink size={14} className="mr-1.5"/> 열기
+                  </Button>
+                ) : <Badge variant="secondary" className="opacity-50">미등록</Badge>}
+              </div>
+            </Card>
+          </div>
         </Tabs>
-
-        {/* Edit Membership Dialog */}
-        <Dialog open={editMembershipDialog} onOpenChange={setEditMembershipDialog}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>인사 정보 수정</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <Label>부서</Label>
-                <Select value={editForm.department} onValueChange={(v) => setEditForm({ ...editForm, department: v })}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="부서 선택" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">없음</SelectItem>
-                    {departments.map((d) => (
-                      <SelectItem key={d.id} value={d.name}>
-                        {d.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>직급</Label>
-                <Select value={editForm.job_title} onValueChange={(v) => setEditForm({ ...editForm, job_title: v })}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="직급 선택" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">없음</SelectItem>
-                    {jobTitles.map((j) => (
-                      <SelectItem key={j.id} value={j.name}>
-                        {j.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>권한</Label>
-                <Select
-                  value={editForm.role}
-                  onValueChange={(v) =>
-                    setEditForm({ ...editForm, role: v as "company_admin" | "manager" | "employee" })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="employee">직원</SelectItem>
-                    <SelectItem value="manager">매니저</SelectItem>
-                    <SelectItem value="company_admin">관리자</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setEditMembershipDialog(false)}>
-                취소
-              </Button>
-              <Button onClick={handleUpdateMembership}>저장</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        {/* Add HR Record Dialog */}
-        <Dialog open={addRecordDialog} onOpenChange={setAddRecordDialog}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>인사 기록 추가</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <Label>유형</Label>
-                <Select
-                  value={recordForm.record_type}
-                  onValueChange={(v) => setRecordForm({ ...recordForm, record_type: v })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(recordTypeLabels).map(([key, val]) => (
-                      <SelectItem key={key} value={key}>
-                        {val.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>제목</Label>
-                <Input
-                  value={recordForm.title}
-                  onChange={(e) => setRecordForm({ ...recordForm, title: e.target.value })}
-                  placeholder="예: 마케팅팀 이동"
-                />
-              </div>
-              <div>
-                <Label>발효일</Label>
-                <Input
-                  type="date"
-                  value={recordForm.effective_date}
-                  onChange={(e) => setRecordForm({ ...recordForm, effective_date: e.target.value })}
-                />
-              </div>
-              <div>
-                <Label>상세 내용 (선택)</Label>
-                <Textarea
-                  value={recordForm.description}
-                  onChange={(e) => setRecordForm({ ...recordForm, description: e.target.value })}
-                  placeholder="추가 설명을 입력하세요"
-                  rows={3}
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setAddRecordDialog(false)}>
-                취소
-              </Button>
-              <Button onClick={handleAddRecord} disabled={!recordForm.title}>
-                추가
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
       </main>
     </div>
   );

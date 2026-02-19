@@ -1,4 +1,4 @@
-import { useState, useEffect, createContext, useContext, ReactNode } from "react";
+import { useState, useEffect, createContext, useContext, ReactNode, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { User, Session } from "@supabase/supabase-js";
 
@@ -42,6 +42,7 @@ interface AuthContextType {
   memberships: TenantMembership[];
   currentTenant: TenantMembership | null;
   setCurrentTenant: (membership: TenantMembership | null) => void;
+  refreshMemberships: () => Promise<void>; // 명시적으로 멤버십 리스트를 갱신하는 기능 추가
   loading: boolean;
   signUp: (email: string, password: string, fullName: string, companyName: string, companyType?: string) => Promise<{ error: Error | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
@@ -119,6 +120,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return data as SignupRequest | null;
   };
 
+  // 멤버십 정보만 새로고침하는 함수 (슈퍼어드민이 새 테넌트 등록 시 호출용)
+  const refreshMemberships = useCallback(async () => {
+    if (!user) return;
+    
+    let mData: TenantMembership[] = [];
+    const profileData = await fetchProfile(user.id);
+    
+    if (profileData?.system_role === "sys_super_admin") {
+      mData = await fetchAllTenantsAsMemberships();
+    } else {
+      mData = await fetchMemberships(user.id);
+    }
+    
+    setMemberships(mData);
+    
+    // 현재 선택된 회사가 리스트에 없거나 초기 상태라면 첫 번째로 설정
+    if (mData.length > 0 && !currentTenant) {
+      setCurrentTenant(mData[0]);
+    }
+  }, [user, currentTenant]);
+
   const loadUserData = async (userId: string) => {
     try {
       const profileData = await fetchProfile(userId);
@@ -140,7 +162,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setSignupRequest(sData);
     } catch (error) {
       console.error("loadUserData error:", error);
-      // 에러가 나도 상태를 초기화하여 앱이 멈추지 않도록 함
     }
   };
 
@@ -166,7 +187,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           setSession(session);
           setUser(session?.user ?? null);
           if (session?.user) {
-            // setTimeout으로 Supabase 내부 콜백 외부에서 실행 (데드락 방지)
             setTimeout(async () => {
               if (!mounted) return;
               await loadUserData(session.user.id);
@@ -235,14 +255,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const signOut = async () => {
-    // 1. Supabase 세션을 먼저 무효화 (SDK 내부 메모리 + 스토리지 정리)
     try {
       await supabase.auth.signOut({ scope: "local" });
     } catch (error) {
       console.error("Sign out error:", error);
     }
 
-    // 2. SDK가 혹시 다시 쓸 수 있으므로 signOut 이후에 스토리지 강제 삭제
     try {
       sessionStorage.clear();
       localStorage.clear();
@@ -250,7 +268,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       console.warn("Storage clear error:", e);
     }
 
-    // 3. 상태 초기화
     setSession(null);
     setUser(null);
     setProfile(null);
@@ -258,7 +275,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setCurrentTenant(null);
     setSignupRequest(null);
 
-    // 4. 뒤로가기 복원 불가능하도록 replace
     window.location.replace("/auth");
   };
 
@@ -271,6 +287,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         memberships,
         currentTenant,
         setCurrentTenant,
+        refreshMemberships, // Provider를 통해 함수 노출
         loading,
         signUp,
         signIn,

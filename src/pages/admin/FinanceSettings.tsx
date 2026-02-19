@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import {
   Landmark, CreditCard, Plus, Trash2, ShieldCheck, Database,
-  RefreshCw, Save, Settings, Eye, EyeOff,
+  RefreshCw, Save, Settings, Eye, EyeOff, ExternalLink,
 } from "lucide-react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -264,13 +264,29 @@ const FinanceSettings = () => {
     <div className="min-h-screen bg-background">
       <Header />
       <main className="pt-28 pb-16 px-6 max-w-6xl mx-auto space-y-8">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <h1 className="text-3xl font-black flex items-center gap-3">
             <Database className="text-primary" /> 금융 연동 마스터
           </h1>
-          <Button onClick={() => setIsDialogOpen(true)} className="rounded-xl px-6 h-12 font-bold shadow-lg">
-            <Plus className="mr-2" /> 신규 Connected ID 발급
-          </Button>
+          
+          {/* 버튼 그룹 */}
+          <div className="flex items-center gap-3">
+            <Button 
+              variant="outline" 
+              className="rounded-xl px-4 h-12 font-bold border-slate-200 hover:bg-slate-50 transition-all"
+              onClick={() => window.open("https://codef.io/login", "_blank")}
+            >
+              <ExternalLink className="mr-2 w-4 h-4 text-slate-500" />
+              CODEF API 받으러 가기
+            </Button>
+            
+            <Button 
+              onClick={() => setIsDialogOpen(true)} 
+              className="rounded-xl px-6 h-12 font-bold shadow-lg bg-primary hover:bg-primary/90"
+            >
+              <Plus className="mr-2 w-5 h-5" /> 신규 Connected ID 발급
+            </Button>
+          </div>
         </div>
 
         {/* CODEF 마스터 키 */}

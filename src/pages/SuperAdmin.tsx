@@ -12,7 +12,7 @@ import {
   Building2, Search, Plus, Users, Settings, 
   ShieldCheck, Activity, Database, Server,
   ExternalLink, MoreHorizontal, Check, X, Loader2, Edit2, Trash2, Key,
-  MessageSquareShare, Clock, Palmtree
+  MessageSquareShare, Clock, Palmtree, FolderTree, HardDrive 
 } from "lucide-react";
 import { getCompanyTypeBadge } from "@/lib/companyTypes";
 import {
@@ -22,7 +22,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, 
 } from "@/components/ui/alert-dialog";
 
 interface SignupRequest {
@@ -334,6 +334,22 @@ const SuperAdmin = () => {
             </div>
           </div>
         )}
+
+
+
+        {/* [추가] 표준 드라이브 구조 설계 카드 */}
+        <div 
+          onClick={() => navigate("/super-admin/drive-template")}
+          className="group bg-white p-5 rounded-xl border border-slate-200 hover:border-blue-600 hover:shadow-md transition-all cursor-pointer flex flex-col gap-3"
+        >
+          <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600 group-hover:scale-110 transition-transform">
+            <FolderTree className="w-6 h-6" />
+          </div>
+          <div>
+            <h3 className="font-bold text-slate-900">표준 드라이브 구조</h3>
+            <p className="text-xs text-slate-500 mt-1">전사 표준 폴더 트리(매니지먼트, 홍보, 재무 등)를 설계합니다.</p>
+          </div>
+        </div>
 
         {/* 4. 고객사 목록 테이블 (기존 로직 유지) */}
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
