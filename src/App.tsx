@@ -52,6 +52,8 @@ import WorkRuleManagement from "./pages/admin/WorkRuleManagement";
 import AttendanceManagement from "./pages/admin/AttendanceManagement";
 import MailSettings from "./pages/admin/MailSettings";
 import FinanceSettings from "./pages/admin/FinanceSettings";
+import SecurityManagement from "./pages/admin/SecurityManagement";
+import PasswordManagement from "./pages/PasswordManagement";
 
 // 슈퍼 어드민 (Super Admin) 전용 페이지
 import SuperAdmin from "./pages/SuperAdmin";
@@ -119,6 +121,8 @@ const App = () => (
               <Route path="/admin/attendance" element={<AttendanceManagement />} />
               <Route path="/admin/mail-settings" element={<MailSettings />} />
               <Route path="/admin/finance-settings" element={<FinanceSettings />} />
+              <Route path="/admin/security" element={<SecurityManagement />} />
+              <Route path="/apps/common/password-mgmt" element={<PasswordManagement />} />
             </Route>
 
             {/* 3. 슈퍼 어드민 전용 경로 (시스템 총괄 관리) */}

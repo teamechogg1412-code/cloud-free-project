@@ -145,6 +145,6 @@ export const SUB_MENUS: Record<string, any[]> = {
     { id: "notifications", name: "알림 센터", icon: <Bell /> },
     { id: "global-search", name: "통합 검색", icon: <Search /> },
     { id: "wreath", name: "화환신청", icon: <Flower2 /> },
-    { id: "password-mgmt", name: "비밀번호 관리", icon: <KeyRound /> },
+    { id: "password-mgmt", name: "비밀번호 관리", icon: <KeyRound />, path: "/apps/common/password-mgmt" },
   ],
 };

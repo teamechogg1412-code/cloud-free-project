@@ -1,7 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { 
   Users, Key, UserCog, Laptop, Database, ShieldCheck, ArrowLeft, Mail,
-  Building, CreditCard, CarFront, Megaphone, Target, Navigation, Handshake, Eye, Calendar
+  Building, CreditCard, CarFront, Megaphone, Target, Navigation, Handshake, Eye, Calendar, ShieldAlert
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -127,6 +127,13 @@ const AdminSystem = () => {
       path: "/admin/drive-settings", 
       color: "bg-blue-600", 
       desc: "전사 스토리지 구성" 
+    },
+    { 
+      title: "보안관리", 
+      icon: <ShieldAlert className="w-6 h-6" />, 
+      path: "/admin/security", 
+      color: "bg-red-600", 
+      desc: "공유 계정 비밀번호 관리 및 접근 권한 제어" 
     },
   ];
 
