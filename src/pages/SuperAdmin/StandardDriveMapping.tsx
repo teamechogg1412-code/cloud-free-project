@@ -9,7 +9,7 @@ const StandardDriveMapping = () => {
   const [templates, setTemplates] = useState<any[]>([]);
 
   useEffect(() => {
-    supabase.from("system_drive_templates").select("*").order("sort_order")
+    (supabase as any).from("system_drive_templates").select("*").order("sort_order")
       .then(({ data }) => setTemplates(data || []));
   }, []);
 
