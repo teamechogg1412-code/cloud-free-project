@@ -14,7 +14,110 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      leave_groups: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          name: string
+          overdraft_limit: number | null
+          sort_order: number | null
+          tenant_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          overdraft_limit?: number | null
+          sort_order?: number | null
+          tenant_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          overdraft_limit?: number | null
+          sort_order?: number | null
+          tenant_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      leave_types: {
+        Row: {
+          created_at: string
+          deduction_days: number | null
+          display_name: string | null
+          group_id: string | null
+          id: string
+          include_holidays_in_consecutive: boolean | null
+          is_active: boolean
+          is_paid: boolean | null
+          max_consecutive_days: number | null
+          min_consecutive_days: number | null
+          name: string
+          paid_hours: number | null
+          sort_order: number | null
+          special_option: string | null
+          tenant_id: string | null
+          time_option: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          deduction_days?: number | null
+          display_name?: string | null
+          group_id?: string | null
+          id?: string
+          include_holidays_in_consecutive?: boolean | null
+          is_active?: boolean
+          is_paid?: boolean | null
+          max_consecutive_days?: number | null
+          min_consecutive_days?: number | null
+          name: string
+          paid_hours?: number | null
+          sort_order?: number | null
+          special_option?: string | null
+          tenant_id?: string | null
+          time_option?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          deduction_days?: number | null
+          display_name?: string | null
+          group_id?: string | null
+          id?: string
+          include_holidays_in_consecutive?: boolean | null
+          is_active?: boolean
+          is_paid?: boolean | null
+          max_consecutive_days?: number | null
+          min_consecutive_days?: number | null
+          name?: string
+          paid_hours?: number | null
+          sort_order?: number | null
+          special_option?: string | null
+          tenant_id?: string | null
+          time_option?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "leave_types_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "leave_groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never

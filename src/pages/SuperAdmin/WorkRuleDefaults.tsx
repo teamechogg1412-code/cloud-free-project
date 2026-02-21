@@ -14,7 +14,7 @@ import {
   ArrowLeft, Plus, Save, Loader2, Trash2, Clock,
   ShieldCheck, PenTool, AlertTriangle,
 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 
 interface WorkRule {

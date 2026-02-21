@@ -13,7 +13,7 @@ import {
   ArrowLeft, Plus, Save, Loader2, Trash2, Clock,
   Download, PenTool, AlertTriangle, ShieldCheck,
 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 
