@@ -18,17 +18,26 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import {
   Users, Plus, Search, Filter, MoreHorizontal, Mail, Phone, Globe,
   Loader2, Save, Edit2, Trash2, ArrowLeft, Terminal, Upload, Download
 } from "lucide-react";
-import { Tables } from "@/integrations/supabase/types";
 import * as XLSX from "xlsx";
 
 // DB 타입 정의
-type PressContact = Tables<'press_contacts'>;
+interface PressContact {
+  id: string;
+  media_company: string;
+  reporter_name: string;
+  contact_email: string;
+  contact_phone: string | null;
+  purpose: string | null;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+}
 
 // 목적 옵션 (Select 오류 방지를 위해 '전체' 및 '선택 안 함' 항목은 별도로 관리)
 const purposeOptions = ["PR (언론 홍보)", "브랜드 마케팅", "광고 제휴", "기타"];

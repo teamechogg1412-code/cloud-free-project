@@ -32,7 +32,7 @@ import { format, isSameDay, parseISO, startOfMonth, endOfMonth } from "date-fns"
 import { ko } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 
 interface Schedule {

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/supabase";
 import { Header } from "@/components/landing/Header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
