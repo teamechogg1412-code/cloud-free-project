@@ -53,11 +53,71 @@ interface LeaveType {
 // tenant_id가 NULL인 레코드 = 시스템 기본값
 const SYSTEM_TENANT_ID = null;
 
+const DEFAULT_GROUPS = [
+  { name: "연차휴가", description: "법정 연차 및 관련 휴가를 관리합니다.", sort_order: 1 },
+  { name: "경조휴가", description: "결혼, 조의 등 경조사 관련 휴가입니다.", sort_order: 2 },
+  { name: "출산·육아휴가", description: "출산, 육아 관련 법정 휴가입니다.", sort_order: 3 },
+  { name: "병가", description: "질병 및 부상으로 인한 휴가입니다.", sort_order: 4 },
+  { name: "특별휴가", description: "회사 복지 차원의 특별 휴가입니다.", sort_order: 5 },
+  { name: "무급휴가", description: "급여가 지급되지 않는 휴가입니다.", sort_order: 6 },
+  { name: "대체휴무", description: "휴일/주말 근무에 대한 대체 휴무입니다.", sort_order: 7 },
+];
+
+const DEFAULT_TYPES_BY_GROUP: Record<string, Array<{name: string; display_name?: string; time_option: string; paid_hours: number; deduction_days: number; is_paid: boolean; special_option: string; sort_order: number; min_consecutive_days?: number; max_consecutive_days?: number}>> = {
+  "연차휴가": [
+    { name: "연차", time_option: "full_day", paid_hours: 8, deduction_days: 1, is_paid: true, special_option: "none", sort_order: 1 },
+    { name: "반차", display_name: "반차", time_option: "time_input", paid_hours: 4, deduction_days: 0.5, is_paid: true, special_option: "none", sort_order: 2 },
+    { name: "반반차", display_name: "반반차(2시간)", time_option: "time_input", paid_hours: 2, deduction_days: 0.25, is_paid: true, special_option: "none", sort_order: 3 },
+    { name: "시간차", display_name: "시간차(1시간)", time_option: "time_input", paid_hours: 1, deduction_days: 0.125, is_paid: true, special_option: "none", sort_order: 4 },
+    { name: "대체연차", display_name: "대체연차(휴일근무)", time_option: "full_day", paid_hours: 8, deduction_days: 1, is_paid: true, special_option: "none", sort_order: 5 },
+  ],
+  "경조휴가": [
+    { name: "본인 결혼", time_option: "full_day", paid_hours: 8, deduction_days: 0, is_paid: true, special_option: "long_term", sort_order: 1, min_consecutive_days: 5, max_consecutive_days: 5 },
+    { name: "자녀 결혼", time_option: "full_day", paid_hours: 8, deduction_days: 0, is_paid: true, special_option: "none", sort_order: 2 },
+    { name: "부모상", time_option: "full_day", paid_hours: 8, deduction_days: 0, is_paid: true, special_option: "long_term", sort_order: 3, min_consecutive_days: 5, max_consecutive_days: 5 },
+    { name: "배우자상", time_option: "full_day", paid_hours: 8, deduction_days: 0, is_paid: true, special_option: "long_term", sort_order: 4, min_consecutive_days: 5, max_consecutive_days: 5 },
+    { name: "형제자매상", time_option: "full_day", paid_hours: 8, deduction_days: 0, is_paid: true, special_option: "long_term", sort_order: 5, min_consecutive_days: 3, max_consecutive_days: 3 },
+    { name: "조부모상", time_option: "full_day", paid_hours: 8, deduction_days: 0, is_paid: true, special_option: "long_term", sort_order: 6, min_consecutive_days: 3, max_consecutive_days: 3 },
+    { name: "배우자 출산", time_option: "full_day", paid_hours: 8, deduction_days: 0, is_paid: true, special_option: "long_term", sort_order: 7, min_consecutive_days: 10, max_consecutive_days: 10 },
+  ],
+  "출산·육아휴가": [
+    { name: "출산휴가", time_option: "full_day", paid_hours: 8, deduction_days: 0, is_paid: true, special_option: "long_term", sort_order: 1, min_consecutive_days: 90, max_consecutive_days: 90 },
+    { name: "유산·사산휴가", time_option: "full_day", paid_hours: 8, deduction_days: 0, is_paid: true, special_option: "long_term", sort_order: 2 },
+    { name: "배우자 출산휴가", time_option: "full_day", paid_hours: 8, deduction_days: 0, is_paid: true, special_option: "long_term", sort_order: 3, min_consecutive_days: 10, max_consecutive_days: 10 },
+    { name: "육아휴직", time_option: "full_day", paid_hours: 0, deduction_days: 0, is_paid: false, special_option: "long_term", sort_order: 4 },
+    { name: "육아기 근로시간 단축", time_option: "time_input", paid_hours: 0, deduction_days: 0, is_paid: false, special_option: "none", sort_order: 5 },
+  ],
+  "병가": [
+    { name: "병가(유급)", time_option: "full_day", paid_hours: 8, deduction_days: 1, is_paid: true, special_option: "none", sort_order: 1 },
+    { name: "병가(무급)", time_option: "full_day", paid_hours: 0, deduction_days: 1, is_paid: false, special_option: "none", sort_order: 2 },
+    { name: "장기 병가", time_option: "full_day", paid_hours: 0, deduction_days: 0, is_paid: false, special_option: "long_term", sort_order: 3 },
+    { name: "공상병가", time_option: "full_day", paid_hours: 8, deduction_days: 0, is_paid: true, special_option: "long_term", sort_order: 4 },
+  ],
+  "특별휴가": [
+    { name: "생일휴가", time_option: "full_day", paid_hours: 8, deduction_days: 0, is_paid: true, special_option: "none", sort_order: 1 },
+    { name: "리프레시 휴가", time_option: "full_day", paid_hours: 8, deduction_days: 0, is_paid: true, special_option: "none", sort_order: 2 },
+    { name: "장기근속 휴가", time_option: "full_day", paid_hours: 8, deduction_days: 0, is_paid: true, special_option: "long_term", sort_order: 3 },
+    { name: "창립기념일 휴가", time_option: "full_day", paid_hours: 8, deduction_days: 0, is_paid: true, special_option: "holiday", sort_order: 4 },
+    { name: "포상휴가", time_option: "full_day", paid_hours: 8, deduction_days: 0, is_paid: true, special_option: "none", sort_order: 5 },
+  ],
+  "무급휴가": [
+    { name: "개인사유 무급휴가", time_option: "full_day", paid_hours: 0, deduction_days: 0, is_paid: false, special_option: "none", sort_order: 1 },
+    { name: "학업 무급휴가", time_option: "full_day", paid_hours: 0, deduction_days: 0, is_paid: false, special_option: "long_term", sort_order: 2 },
+    { name: "장기 무급휴직", time_option: "full_day", paid_hours: 0, deduction_days: 0, is_paid: false, special_option: "long_term", sort_order: 3 },
+  ],
+  "대체휴무": [
+    { name: "휴일근무 대체휴무", time_option: "full_day", paid_hours: 8, deduction_days: 1, is_paid: true, special_option: "day_off", sort_order: 1 },
+    { name: "주말근무 대체휴무", time_option: "full_day", paid_hours: 8, deduction_days: 1, is_paid: true, special_option: "day_off", sort_order: 2 },
+    { name: "공휴일 대체휴무", time_option: "full_day", paid_hours: 8, deduction_days: 1, is_paid: true, special_option: "day_off", sort_order: 3 },
+  ],
+};
+
 const LeaveDefaults = () => {
   const navigate = useNavigate();
   const [groups, setGroups] = useState<LeaveGroup[]>([]);
   const [types, setTypes] = useState<LeaveType[]>([]);
   const [loading, setLoading] = useState(true);
+  const [seeding, setSeeding] = useState(false);
 
   // Group dialog
   const [groupDialog, setGroupDialog] = useState(false);
@@ -84,9 +144,60 @@ const LeaveDefaults = () => {
       supabase.from("leave_groups").select("*").is("tenant_id", null).order("sort_order"),
       supabase.from("leave_types").select("*").is("tenant_id", null).order("sort_order"),
     ]);
+    console.log("leave_groups response:", gRes);
+    console.log("leave_types response:", tRes);
     if (gRes.data) setGroups(gRes.data as LeaveGroup[]);
     if (tRes.data) setTypes(tRes.data as LeaveType[]);
     setLoading(false);
+  };
+
+  const seedDefaults = async () => {
+    setSeeding(true);
+    try {
+      // 1. Insert groups
+      const groupPayloads = DEFAULT_GROUPS.map(g => ({ ...g, tenant_id: SYSTEM_TENANT_ID }));
+      const { data: insertedGroups, error: gError } = await supabase
+        .from("leave_groups")
+        .insert(groupPayloads)
+        .select();
+      if (gError) { toast.error("그룹 생성 실패: " + gError.message); setSeeding(false); return; }
+
+      // 2. Build group name -> id map
+      const groupMap: Record<string, string> = {};
+      for (const g of (insertedGroups || [])) {
+        groupMap[g.name] = g.id;
+      }
+
+      // 3. Insert types
+      const typePayloads: any[] = [];
+      for (const [groupName, typesArr] of Object.entries(DEFAULT_TYPES_BY_GROUP)) {
+        const groupId = groupMap[groupName] || null;
+        for (const t of typesArr) {
+          typePayloads.push({
+            tenant_id: SYSTEM_TENANT_ID,
+            group_id: groupId,
+            name: t.name,
+            display_name: t.display_name || null,
+            time_option: t.time_option,
+            paid_hours: t.paid_hours,
+            deduction_days: t.deduction_days,
+            is_paid: t.is_paid,
+            special_option: t.special_option,
+            sort_order: t.sort_order,
+            min_consecutive_days: t.min_consecutive_days ?? 1,
+            max_consecutive_days: t.max_consecutive_days ?? null,
+          });
+        }
+      }
+      const { error: tError } = await supabase.from("leave_types").insert(typePayloads);
+      if (tError) { toast.error("유형 생성 실패: " + tError.message); setSeeding(false); return; }
+
+      toast.success(`기본값 생성 완료: ${DEFAULT_GROUPS.length}개 그룹, ${typePayloads.length}개 유형`);
+      fetchData();
+    } catch (err: any) {
+      toast.error("기본값 생성 중 오류: " + err.message);
+    }
+    setSeeding(false);
   };
 
   // ===== Group CRUD =====
@@ -197,6 +308,16 @@ const LeaveDefaults = () => {
       <p className="text-sm text-muted-foreground ml-12">
         모든 회사에 기본으로 적용될 휴가 그룹과 유형을 관리합니다. 각 테넌트는 '기본값 불러오기'로 이 데이터를 복사할 수 있습니다.
       </p>
+
+      {groups.length === 0 && types.length === 0 && (
+        <div className="ml-12 p-4 border border-dashed rounded-lg flex items-center gap-4">
+          <p className="text-sm text-muted-foreground">기본 휴가 데이터가 없습니다. 7개 그룹 + 32개 유형을 자동 생성할 수 있습니다.</p>
+          <Button onClick={seedDefaults} disabled={seeding}>
+            <FolderOpen className="w-4 h-4 mr-1" />
+            {seeding ? "생성 중..." : "기본값 자동 생성"}
+          </Button>
+        </div>
+      )}
 
       <Tabs defaultValue="groups">
         <TabsList>
