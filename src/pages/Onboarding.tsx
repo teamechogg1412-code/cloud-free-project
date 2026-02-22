@@ -29,6 +29,7 @@ const Onboarding = () => {
   const [jobTitles, setJobTitles] = useState<JobOption[]>([]);
 
   const [formData, setFormData] = useState({
+    full_name: profile?.full_name || "",
     hire_date: "", resignation_date: "", department: "", job_title: "",
     resident_number: "", is_foreigner: "내국인", nationality: "대한민국", address: "",
     phone_mobile: "", phone_tel: "", email: profile?.email || "",
@@ -93,7 +94,7 @@ const Onboarding = () => {
 
   // --- 저장 및 업로드 핵심 로직 ---
   const handleSave = async () => {
-    if (!formData.hire_date || !formData.department || !formData.resident_number || !formData.address || !formData.account_number) {
+    if (!formData.full_name.trim() || !formData.hire_date || !formData.department || !formData.resident_number || !formData.address || !formData.account_number) {
       toast.error("필수 항목(*)을 모두 입력해주세요.");
       return;
     }
@@ -164,10 +165,10 @@ const Onboarding = () => {
 
       if (memberError) throw memberError;
 
-      // 5. profiles에 전화번호 업데이트
-      if (formData.phone_mobile) {
-        await supabase.from("profiles").update({ phone: formData.phone_mobile }).eq("id", user.id);
-      }
+      // 5. profiles에 이름 및 전화번호 업데이트
+      const profileUpdate: any = { full_name: formData.full_name.trim() };
+      if (formData.phone_mobile) profileUpdate.phone = formData.phone_mobile;
+      await supabase.from("profiles").update(profileUpdate).eq("id", user.id);
 
       // 6. PDF 생성 후 텔레그램으로 전송
       try {
@@ -245,6 +246,10 @@ const Onboarding = () => {
                 <p className="text-[13px] text-slate-500 font-medium">회사 내에서의 역할과 입사일을 지정합니다.</p>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3">
+                <div className="space-y-1 md:col-span-2">
+                  <Label className="text-[12px] font-bold text-slate-600">성명 (이름) *</Label>
+                  <Input placeholder="홍길동" className="h-10 rounded-lg" value={formData.full_name} onChange={e => setFormData({...formData, full_name: e.target.value})} />
+                </div>
                 <div className="space-y-1">
                   <Label className="text-[12px] font-bold text-slate-600">입사일자 *</Label>
                   <Input type="date" className="h-10 rounded-lg" value={formData.hire_date} onChange={e => setFormData({...formData, hire_date: e.target.value})} />
