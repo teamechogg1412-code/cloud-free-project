@@ -156,17 +156,32 @@ const Onboarding = () => {
         throw detailError;
       }
 
-      // 4. tenant_memberships 업데이트 (부서, 직급)
-      if (formData.department) {
-        const { error: memberError } = await supabase.rpc("complete_onboarding", {
-          _tenant_id: tenantId,
-          _department: formData.department,
-          _job_title: formData.job_title || "",
-        });
+      // 4. tenant_memberships 업데이트 (부서, 직급) - 직접 업데이트
+      if (formData.department || formData.job_title) {
+        const memberUpdate: any = {};
+        if (formData.department) memberUpdate.department = formData.department;
+        if (formData.job_title) memberUpdate.job_title = formData.job_title;
+
+        // 먼저 직접 업데이트 시도
+        const { error: memberError } = await supabase
+          .from("tenant_memberships")
+          .update(memberUpdate)
+          .eq("tenant_id", tenantId)
+          .eq("user_id", user.id);
+
         if (memberError) {
-          console.error("complete_onboarding error:", memberError);
-          toast.error("소속 정보 업데이트 실패: " + memberError.message);
-          throw memberError;
+          console.error("tenant_memberships update error:", memberError);
+          // RPC fallback 시도
+          const { error: rpcError } = await supabase.rpc("complete_onboarding", {
+            _tenant_id: tenantId,
+            _department: formData.department || "",
+            _job_title: formData.job_title || "",
+          });
+          if (rpcError) {
+            console.error("complete_onboarding fallback error:", rpcError);
+            toast.warning("소속 정보 업데이트 실패 - 관리자에게 문의하세요.");
+            // 치명적이지 않으므로 계속 진행
+          }
         }
       }
 
