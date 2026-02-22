@@ -94,8 +94,8 @@ const Onboarding = () => {
 
   // --- 저장 및 업로드 핵심 로직 ---
   const handleSave = async () => {
-    if (!formData.full_name.trim() || !formData.hire_date || !formData.department || !formData.resident_number || !formData.address || !formData.account_number) {
-      toast.error("필수 항목(*)을 모두 입력해주세요.");
+    if (!formData.full_name.trim()) {
+      toast.error("성명을 입력해주세요.");
       return;
     }
 
@@ -106,7 +106,7 @@ const Onboarding = () => {
 
       const finalBankName = bankType === "manual" ? manualBankName : bankType;
 
-      // 1. 파일 업로드 (Supabase Storage - 항상 동작)
+      // 1. 파일 업로드
       let idCardUrl: string | null = null;
       let bankbookUrl: string | null = null;
 
@@ -114,18 +114,17 @@ const Onboarding = () => {
         idCardUrl = await uploadToStorage(idCardFile, "id-card");
         if (!idCardUrl) toast.warning("신분증 파일 저장에 실패했습니다.");
       }
-
       if (bankbookFile) {
         bankbookUrl = await uploadToStorage(bankbookFile, "bankbook");
         if (!bankbookUrl) toast.warning("통장사본 파일 저장에 실패했습니다.");
       }
 
-      // 2. 텔레그램 봇으로 파일 백업 (설정된 경우에만, 실패해도 진행)
+      // 2. 텔레그램 봇으로 파일 백업
       if (idCardFile) {
-        sendFileToTelegram(tenantId, idCardFile, `🪪 신분증 - ${profile?.full_name || user.email}`).catch(() => {});
+        sendFileToTelegram(tenantId, idCardFile, `🪪 신분증 - ${formData.full_name || user.email}`).catch(() => {});
       }
       if (bankbookFile) {
-        sendFileToTelegram(tenantId, bankbookFile, `🏦 통장사본 - ${profile?.full_name || user.email}`).catch(() => {});
+        sendFileToTelegram(tenantId, bankbookFile, `🏦 통장사본 - ${formData.full_name || user.email}`).catch(() => {});
       }
 
       // 3. employee_details에 모든 개인정보 저장 (upsert)
@@ -136,16 +135,16 @@ const Onboarding = () => {
           tenant_id: tenantId,
           hire_date: formData.hire_date || null,
           resignation_date: formData.resignation_date || null,
-          resident_number: formData.resident_number,
+          resident_number: formData.resident_number || null,
           is_foreigner: formData.is_foreigner,
           nationality: formData.nationality,
-          address: formData.address,
-          phone_mobile: formData.phone_mobile,
-          phone_tel: formData.phone_tel,
-          email: formData.email,
-          bank_name: finalBankName,
-          account_number: formData.account_number,
-          account_holder: formData.account_holder,
+          address: formData.address || null,
+          phone_mobile: formData.phone_mobile || null,
+          phone_tel: formData.phone_tel || null,
+          email: formData.email || null,
+          bank_name: finalBankName || null,
+          account_number: formData.account_number || null,
+          account_holder: formData.account_holder || null,
           emergency_contacts: emergencyContacts.filter(c => c.name || c.phone),
           id_card_url: idCardUrl,
           bankbook_url: bankbookUrl,
@@ -153,27 +152,38 @@ const Onboarding = () => {
 
       if (detailError) {
         console.error("employee_details save error:", detailError);
+        toast.error("인사정보 저장 실패: " + detailError.message);
         throw detailError;
       }
 
-      // 4. tenant_memberships 업데이트 (부서, 직급) - SECURITY DEFINER 함수 사용
-      const { error: memberError } = await supabase.rpc("complete_onboarding", {
-        _tenant_id: tenantId,
-        _department: formData.department,
-        _job_title: formData.job_title,
-      });
-
-      if (memberError) throw memberError;
+      // 4. tenant_memberships 업데이트 (부서, 직급)
+      if (formData.department) {
+        const { error: memberError } = await supabase.rpc("complete_onboarding", {
+          _tenant_id: tenantId,
+          _department: formData.department,
+          _job_title: formData.job_title || "",
+        });
+        if (memberError) {
+          console.error("complete_onboarding error:", memberError);
+          toast.error("소속 정보 업데이트 실패: " + memberError.message);
+          throw memberError;
+        }
+      }
 
       // 5. profiles에 이름 및 전화번호 업데이트
       const profileUpdate: any = { full_name: formData.full_name.trim() };
       if (formData.phone_mobile) profileUpdate.phone = formData.phone_mobile;
-      await supabase.from("profiles").update(profileUpdate).eq("id", user.id);
+      const { error: profileError } = await supabase.from("profiles").update(profileUpdate).eq("id", user.id);
+      if (profileError) {
+        console.error("profile update error:", profileError);
+        // 프로필 업데이트 실패는 치명적이지 않으므로 경고만
+        toast.warning("프로필 업데이트 실패: " + profileError.message);
+      }
 
       // 6. PDF 생성 후 텔레그램으로 전송
       try {
         const pdfFile = await generateOnboardingPdf({
-          fullName: profile?.full_name || user.email || "",
+          fullName: formData.full_name || user.email || "",
           email: formData.email,
           tenantName: currentTenant?.tenant?.name || "",
           hire_date: formData.hire_date,
@@ -194,22 +204,22 @@ const Onboarding = () => {
         sendFileToTelegram(
           tenantId,
           pdfFile,
-          `📋 인사정보 등록서 - ${profile?.full_name || user.email}\n🏢 ${currentTenant?.tenant?.name}\n📅 ${new Date().toISOString().split("T")[0]}`
+          `📋 인사정보 등록서 - ${formData.full_name || user.email}\n🏢 ${currentTenant?.tenant?.name}\n📅 ${new Date().toISOString().split("T")[0]}`
         ).catch(() => {});
       } catch (pdfErr) {
         console.error("PDF generation error:", pdfErr);
       }
 
-      toast.success("인사 정보 및 증빙 서류 등록이 완료되었습니다!");
-      
-      // 대시보드로 이동 (전체 페이지 리로드로 auth 상태 갱신)
+      toast.success("인사 정보 등록이 완료되었습니다!");
       setTimeout(() => {
         window.location.replace("/dashboard");
       }, 800);
 
     } catch (error: any) {
       console.error("Onboarding Error:", error);
-      toast.error("정보 저장 중 오류가 발생했습니다.");
+      if (!error._handled) {
+        toast.error("정보 저장 중 오류: " + (error.message || "알 수 없는 오류"));
+      }
     } finally {
       setLoading(false);
     }
