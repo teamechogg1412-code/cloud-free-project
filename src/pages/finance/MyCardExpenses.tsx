@@ -1,5 +1,3 @@
-// File Path: src/pages/finance/MyCardExpenses.tsx
-
 import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/lib/supabase";
@@ -7,13 +5,13 @@ import { Header } from "@/components/landing/Header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { 
-  CreditCard, Calendar, ArrowLeft, Receipt, Store, 
-  TrendingUp, AlertCircle, Loader2, Download 
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  CreditCard, Calendar, ArrowLeft, Receipt, Store,
+  TrendingUp, AlertCircle, Loader2, Download, Plus, FileText,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
-import { ko } from "date-fns/locale";
 import { Progress } from "@/components/ui/progress";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -21,6 +19,9 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { AddTransactionDialog } from "@/components/finance/AddTransactionDialog";
+import { ExpenseReportDialog } from "@/components/finance/ExpenseReportDialog";
+import { toast } from "sonner";
 
 interface MyCard {
   id: string;
@@ -51,11 +52,16 @@ const MyCardExpenses = () => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [currentMonthSpend, setCurrentMonthSpend] = useState(0);
 
-  // 1. 내 카드 목록 불러오기
+  // 수동 등록 다이얼로그
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
+
+  // 체크박스 선택 & 청구서
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [reportOpen, setReportOpen] = useState(false);
+
   useEffect(() => {
     const fetchMyCards = async () => {
       if (!user || !currentTenant) return;
-      
       try {
         const { data, error } = await supabase
           .from("corporate_cards")
@@ -63,12 +69,10 @@ const MyCardExpenses = () => {
           .eq("tenant_id", currentTenant.tenant_id)
           .eq("holder_user_id", user.id)
           .eq("is_active", true);
-
         if (error) throw error;
-
         if (data && data.length > 0) {
           setCards(data);
-          setSelectedCardId(data[0].id); // 첫 번째 카드를 기본 선택
+          setSelectedCardId(data[0].id);
         }
       } catch (error) {
         console.error("Error fetching cards:", error);
@@ -76,53 +80,75 @@ const MyCardExpenses = () => {
         setLoading(false);
       }
     };
-
     fetchMyCards();
   }, [user, currentTenant]);
 
-  // 2. 선택된 카드의 내역 불러오기
+  const fetchTransactions = async () => {
+    if (!selectedCardId) return;
+    const { data, error } = await supabase
+      .from("card_transactions")
+      .select("*")
+      .eq("card_id", selectedCardId)
+      .order("transaction_date", { ascending: false });
+
+    if (!error && data) {
+      setTransactions(data);
+      const now = new Date();
+      const thisMonthTotal = data
+        .filter(t => {
+          const tDate = new Date(t.transaction_date);
+          return tDate.getMonth() === now.getMonth() &&
+            tDate.getFullYear() === now.getFullYear() &&
+            t.status !== "cancelled";
+        })
+        .reduce((sum, t) => sum + Number(t.amount), 0);
+      setCurrentMonthSpend(thisMonthTotal);
+    }
+    setSelectedIds(new Set());
+  };
+
   useEffect(() => {
-    const fetchTransactions = async () => {
-      if (!selectedCardId) return;
-
-      const { data, error } = await supabase
-        .from("card_transactions")
-        .select("*")
-        .eq("card_id", selectedCardId)
-        .order("transaction_date", { ascending: false });
-
-      if (!error && data) {
-        setTransactions(data);
-        
-        // 이번 달 사용 금액 계산
-        const now = new Date();
-        const thisMonthTotal = data
-          .filter(t => {
-            const tDate = new Date(t.transaction_date);
-            return tDate.getMonth() === now.getMonth() && 
-                   tDate.getFullYear() === now.getFullYear() &&
-                   t.status !== 'cancelled';
-          })
-          .reduce((sum, t) => sum + Number(t.amount), 0);
-        
-        setCurrentMonthSpend(thisMonthTotal);
-      }
-    };
-
     fetchTransactions();
   }, [selectedCardId]);
 
   const selectedCard = cards.find(c => c.id === selectedCardId);
-  const limitPercentage = selectedCard?.monthly_limit 
+  const limitPercentage = selectedCard?.monthly_limit
     ? Math.min((currentMonthSpend / selectedCard.monthly_limit) * 100, 100)
     : 0;
 
-  const formatCurrency = (amount: number) => 
+  const formatCurrency = (amount: number) =>
     new Intl.NumberFormat("ko-KR", { style: "currency", currency: "KRW" }).format(amount);
 
   const maskCardNumber = (num: string) => {
     if (num.length < 8) return num;
     return num.slice(0, 4) + "-****-****-" + num.slice(-4);
+  };
+
+  // 체크박스 핸들러
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === transactions.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(transactions.map(t => t.id)));
+    }
+  };
+
+  const selectedTransactions = transactions.filter(t => selectedIds.has(t.id));
+
+  const handleOpenReport = () => {
+    if (selectedTransactions.length === 0) {
+      toast.warning("청구서에 포함할 내역을 선택해주세요.");
+      return;
+    }
+    setReportOpen(true);
   };
 
   if (loading) {
@@ -142,7 +168,7 @@ const MyCardExpenses = () => {
           <Button variant="ghost" size="icon" onClick={() => navigate("/apps/finance")}>
             <ArrowLeft className="w-5 h-5" />
           </Button>
-          <div>
+          <div className="flex-1">
             <h1 className="text-2xl font-bold flex items-center gap-2">
               <CreditCard className="w-6 h-6 text-emerald-600" /> 내 법인카드 사용 내역
             </h1>
@@ -162,16 +188,13 @@ const MyCardExpenses = () => {
           </Card>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* 왼쪽: 카드 정보 및 한도 현황 */}
+            {/* 왼쪽: 카드 정보 */}
             <div className="space-y-6">
-              {/* 카드 선택 (카드가 여러 장일 경우) */}
               {cards.length > 1 && (
                 <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
                   <label className="text-xs font-bold text-slate-500 mb-2 block">카드 선택</label>
                   <Select value={selectedCardId} onValueChange={setSelectedCardId}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="카드를 선택하세요" />
-                    </SelectTrigger>
+                    <SelectTrigger><SelectValue placeholder="카드를 선택하세요" /></SelectTrigger>
                     <SelectContent>
                       {cards.map(card => (
                         <SelectItem key={card.id} value={card.id}>
@@ -183,25 +206,21 @@ const MyCardExpenses = () => {
                 </div>
               )}
 
-              {/* 실물 카드 비주얼 */}
+              {/* 카드 비주얼 */}
               <div className="relative h-56 w-full rounded-2xl overflow-hidden shadow-2xl bg-gradient-to-br from-slate-800 to-slate-900 text-white p-6 flex flex-col justify-between">
-                <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/4 blur-3xl"></div>
-                
+                <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/4 blur-3xl" />
                 <div className="flex justify-between items-start z-10">
                   <div>
                     <p className="text-xs text-white/60 font-medium">Corporate Card</p>
                     <p className="font-bold text-lg mt-1">{selectedCard?.card_company}</p>
                   </div>
-                  {/* EMV Chip Visual */}
-                  <div className="w-10 h-8 bg-yellow-200/80 rounded-md"></div>
+                  <div className="w-10 h-8 bg-yellow-200/80 rounded-md" />
                 </div>
-
                 <div className="z-10">
-                  <p className="font-mono text-2xl tracking-widest text-shadow">
+                  <p className="font-mono text-2xl tracking-widest">
                     {maskCardNumber(selectedCard?.card_number || "")}
                   </p>
                 </div>
-
                 <div className="flex justify-between items-end z-10">
                   <div>
                     <p className="text-[10px] text-white/60 uppercase">Card Holder</p>
@@ -243,33 +262,52 @@ const MyCardExpenses = () => {
                       {limitPercentage.toFixed(1)}% 사용 중
                     </p>
                   </div>
-                  
                   <div className="bg-slate-50 p-3 rounded-lg flex gap-3 text-xs text-slate-600">
                     <AlertCircle className="w-4 h-4 text-slate-400 shrink-0" />
-                    <p>
-                      법인카드 사용 후 영수증은 반드시 전자결재 시스템을 통해 제출해야 합니다.
-                    </p>
+                    <p>법인카드 사용 후 영수증은 반드시 전자결재 시스템을 통해 제출해야 합니다.</p>
                   </div>
                 </CardContent>
               </Card>
             </div>
 
-            {/* 오른쪽: 승인 내역 리스트 */}
+            {/* 오른쪽: 승인 내역 */}
             <Card className="lg:col-span-2 border-none shadow-lg h-fit">
               <CardHeader className="flex flex-row items-center justify-between pb-4">
                 <div>
                   <CardTitle className="text-lg">승인 내역</CardTitle>
-                  <CardDescription>최근 결제된 내역입니다.</CardDescription>
+                  <CardDescription>최근 결제된 내역입니다. 선택 후 청구서를 생성할 수 있습니다.</CardDescription>
                 </div>
-                <Button variant="outline" size="sm" className="gap-2">
-                  <Download className="w-4 h-4" /> 엑셀 다운로드
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    onClick={() => setAddDialogOpen(true)}
+                    disabled={!selectedCardId}
+                  >
+                    <Plus className="w-4 h-4" /> 수동 등록
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="gap-2"
+                    onClick={handleOpenReport}
+                    disabled={selectedIds.size === 0}
+                  >
+                    <FileText className="w-4 h-4" /> 청구서 생성 ({selectedIds.size})
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent className="p-0">
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-slate-50 hover:bg-slate-50">
-                      <TableHead className="w-[120px]">승인일시</TableHead>
+                      <TableHead className="w-[40px]">
+                        <Checkbox
+                          checked={transactions.length > 0 && selectedIds.size === transactions.length}
+                          onCheckedChange={toggleSelectAll}
+                        />
+                      </TableHead>
+                      <TableHead className="w-[110px]">승인일시</TableHead>
                       <TableHead>사용처</TableHead>
                       <TableHead>용도 (프로젝트)</TableHead>
                       <TableHead className="text-right">금액</TableHead>
@@ -279,13 +317,19 @@ const MyCardExpenses = () => {
                   <TableBody>
                     {transactions.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={5} className="h-32 text-center text-muted-foreground">
-                          사용 내역이 없습니다.
+                        <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">
+                          사용 내역이 없습니다. '수동 등록' 버튼으로 내역을 추가하세요.
                         </TableCell>
                       </TableRow>
                     ) : (
                       transactions.map((tx) => (
                         <TableRow key={tx.id} className="group hover:bg-slate-50">
+                          <TableCell>
+                            <Checkbox
+                              checked={selectedIds.has(tx.id)}
+                              onCheckedChange={() => toggleSelect(tx.id)}
+                            />
+                          </TableCell>
                           <TableCell className="text-xs text-muted-foreground">
                             <div className="font-medium text-slate-700">
                               {format(new Date(tx.transaction_date), "MM.dd")}
@@ -311,9 +355,9 @@ const MyCardExpenses = () => {
                           </TableCell>
                           <TableCell className="text-center">
                             {tx.receipt_url ? (
-                              <Button 
-                                variant="ghost" 
-                                size="icon" 
+                              <Button
+                                variant="ghost"
+                                size="icon"
                                 className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
                                 onClick={() => window.open(tx.receipt_url || "", "_blank")}
                               >
@@ -330,11 +374,48 @@ const MyCardExpenses = () => {
                     )}
                   </TableBody>
                 </Table>
+
+                {/* 선택 요약 바 */}
+                {selectedIds.size > 0 && (
+                  <div className="border-t bg-slate-50 px-6 py-3 flex items-center justify-between">
+                    <span className="text-sm text-slate-600">
+                      <strong>{selectedIds.size}건</strong> 선택됨 · 합계{" "}
+                      <strong className="text-slate-900">
+                        {formatCurrency(selectedTransactions.reduce((s, t) => s + Number(t.amount), 0))}
+                      </strong>
+                    </span>
+                    <Button size="sm" onClick={handleOpenReport} className="gap-2">
+                      <FileText className="w-4 h-4" /> 청구서 생성
+                    </Button>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
         )}
       </main>
+
+      {/* 수동 등록 다이얼로그 */}
+      <AddTransactionDialog
+        open={addDialogOpen}
+        onOpenChange={setAddDialogOpen}
+        cardId={selectedCardId}
+        onSaved={() => {
+          fetchTransactions();
+          toast.success("내역이 등록되었습니다.");
+        }}
+        supabaseClient={supabase}
+      />
+
+      {/* 청구서 미리보기 다이얼로그 */}
+      <ExpenseReportDialog
+        open={reportOpen}
+        onOpenChange={setReportOpen}
+        transactions={selectedTransactions}
+        cardNumber={selectedCard?.card_number || ""}
+        cardCompany={selectedCard?.card_company || ""}
+        holderName={user?.user_metadata.full_name || ""}
+      />
     </div>
   );
 };
