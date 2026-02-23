@@ -122,17 +122,32 @@ const CorporateCardManagement = () => {
 
   const fetchMembers = async () => {
     if (!currentTenant) return;
+    // 1차: tenant_memberships에서 조회
     const { data } = await supabase
       .from("tenant_memberships")
       .select("user_id, profiles:user_id(full_name, email)")
       .eq("tenant_id", currentTenant.tenant_id);
-    if (data) {
+    if (data && data.length > 0) {
       setMembers(
         data.map((d: any) => ({
           user_id: d.user_id,
           profile: d.profiles,
         }))
       );
+    } else {
+      // fallback: profiles 테이블에서 전체 사용자 조회
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("id, full_name, email")
+        .order("full_name", { ascending: true });
+      if (profiles) {
+        setMembers(
+          profiles.map((p: any) => ({
+            user_id: p.id,
+            profile: { full_name: p.full_name, email: p.email },
+          }))
+        );
+      }
     }
   };
 
