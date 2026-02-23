@@ -202,7 +202,6 @@ const MyCardExpenses = () => {
           orderBy: "0",
           inquiryType: "1",
           memberStoreInfoType: "3",
-          cardNo: selectedCard.card_number || undefined,
         },
       });
 
