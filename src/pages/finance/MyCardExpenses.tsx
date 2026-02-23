@@ -256,6 +256,7 @@ const MyCardExpenses = () => {
 
         await supabase.from("card_transactions").insert({
           card_id: selectedCard.id,
+          tenant_id: currentTenant!.tenant_id,
           transaction_date: dateStr,
           merchant_name: merchantName,
           amount,
