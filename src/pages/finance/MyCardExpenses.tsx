@@ -169,17 +169,23 @@ const MyCardExpenses = () => {
 
     setSyncing(true);
     try {
-      // 1. tenant_api_configs에서 해당 카드사의 Connected ID 조회
+      // 1. tenant_api_configs에서 Connected ID + CODEF 인증정보 조회
       const connectedIdKey = `CONNECTED_ID_CD_${orgCode}`;
-      const { data: configData } = await supabase
+      const { data: configs } = await supabase
         .from("tenant_api_configs")
-        .select("config_value")
+        .select("config_key, config_value")
         .eq("tenant_id", currentTenant.tenant_id)
-        .eq("config_key", connectedIdKey)
-        .single();
+        .in("config_key", [connectedIdKey, "CODEF_CLIENT_ID", "CODEF_CLIENT_SECRET"]);
 
-      if (!configData?.config_value) {
+      const configMap: Record<string, string> = {};
+      (configs || []).forEach((c: any) => { configMap[c.config_key] = c.config_value; });
+
+      if (!configMap[connectedIdKey]) {
         toast.error(`${selectedCard.card_company} 연동 ID가 없습니다. 금융 연동 마스터에서 먼저 카드사 연동을 해주세요.`);
+        return;
+      }
+      if (!configMap["CODEF_CLIENT_ID"] || !configMap["CODEF_CLIENT_SECRET"]) {
+        toast.error("CODEF API 설정(CLIENT_ID, CLIENT_SECRET)이 누락되었습니다.");
         return;
       }
 
@@ -190,28 +196,35 @@ const MyCardExpenses = () => {
       const startDate = format(threeMonthsAgo, "yyyyMMdd");
       const endDate = format(now, "yyyyMMdd");
 
-      // 3. CODEF API 호출
-      const { data, error } = await supabase.functions.invoke("codef-api", {
-        body: {
-          action: "card_approval_list",
-          tenantId: currentTenant.tenant_id,
-          connectedId: configData.config_value,
+      // 3. Cloud 에지 함수 직접 호출 (외부 Supabase 우회)
+      const cloudUrl = `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/codef-card-sync`;
+      const response = await fetch(cloudUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({
+          clientId: configMap["CODEF_CLIENT_ID"],
+          clientSecret: configMap["CODEF_CLIENT_SECRET"],
+          connectedId: configMap[connectedIdKey],
           organization: orgCode,
           startDate,
           endDate,
           orderBy: "0",
           inquiryType: "1",
           memberStoreInfoType: "3",
-        },
+        }),
       });
 
-      if (error) throw error;
+      const data = await response.json();
+      if (!response.ok) throw new Error(data?.error || "CODEF API 호출 실패");
       if (data?.result?.code !== "CF-00000") {
         throw new Error(data?.result?.message || "CODEF API 오류");
       }
 
       // 4. 결과를 card_transactions에 저장
-      const resList = data?.data?.resTrHistoryList || data?.data?.resCardHistoryList || data?.data?.resApprovalList || [];
+      const resList = data?.data?.resTrHistoryList || data?.data?.resApprovalList || data?.data?.resCardHistoryList || [];
       if (resList.length === 0) {
         toast.info("조회된 카드 사용 내역이 없습니다.");
         return;
@@ -219,16 +232,16 @@ const MyCardExpenses = () => {
 
       let insertCount = 0;
       for (const item of resList) {
-        const txDate = item.resUsedDate || item.resTranDate || "";
-        const txTime = item.resUsedTime || "";
+        const txDate = item.resUsedDate || item.resTranDate || item.resApprovalDate || "";
+        const txTime = item.resUsedTime || item.resApprovalTime || "";
         const dateStr = txDate
           ? `${txDate.slice(0, 4)}-${txDate.slice(4, 6)}-${txDate.slice(6, 8)}T${txTime.slice(0, 2) || "00"}:${txTime.slice(2, 4) || "00"}:00`
           : new Date().toISOString();
 
-        const amount = Math.abs(Number(item.resUsedAmount || item.resTranAmount || 0));
+        const amount = Math.abs(Number(item.resUsedAmount || item.resTranAmount || item.resApprovalAmount || 0));
         const merchantName = item.resStoreName || item.resMemberStoreName || item.resStoreBizNo || "알 수 없음";
 
-        // 중복 체크 (같은 카드, 날짜, 금액, 가맹점)
+        // 중복 체크
         const { data: existing } = await supabase
           .from("card_transactions")
           .select("id")
