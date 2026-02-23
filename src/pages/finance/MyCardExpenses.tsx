@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   CreditCard, Calendar, ArrowLeft, Receipt, Store,
-  TrendingUp, AlertCircle, Loader2, Download, Plus, FileText,
+  TrendingUp, AlertCircle, Loader2, Download, Plus, FileText, RefreshCw,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
@@ -22,6 +22,11 @@ import {
 import { AddTransactionDialog } from "@/components/finance/AddTransactionDialog";
 import { ExpenseReportDialog } from "@/components/finance/ExpenseReportDialog";
 import { toast } from "sonner";
+
+const CARD_COMPANY_TO_CODE: Record<string, string> = {
+  "국민카드": "0301", "현대카드": "0302", "삼성카드": "0303", "신한카드": "0304",
+  "롯데카드": "0305", "BC카드": "0306", "하나카드": "0307", "우리카드": "0308",
+};
 
 interface MyCard {
   id: string;
@@ -54,6 +59,7 @@ const MyCardExpenses = () => {
 
   // 수동 등록 다이얼로그
   const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [syncing, setSyncing] = useState(false);
 
   // 체크박스 선택 & 청구서
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -149,6 +155,113 @@ const MyCardExpenses = () => {
       return;
     }
     setReportOpen(true);
+  };
+
+  // CODEF API로 카드 사용내역 동기화
+  const handleSyncFromCodef = async () => {
+    if (!selectedCard || !currentTenant) return;
+
+    const orgCode = CARD_COMPANY_TO_CODE[selectedCard.card_company || ""];
+    if (!orgCode) {
+      toast.error("카드사 코드를 찾을 수 없습니다: " + selectedCard.card_company);
+      return;
+    }
+
+    setSyncing(true);
+    try {
+      // 1. tenant_api_configs에서 해당 카드사의 Connected ID 조회
+      const connectedIdKey = `CONNECTED_ID_CD_${orgCode}`;
+      const { data: configData } = await supabase
+        .from("tenant_api_configs")
+        .select("config_value")
+        .eq("tenant_id", currentTenant.tenant_id)
+        .eq("config_key", connectedIdKey)
+        .single();
+
+      if (!configData?.config_value) {
+        toast.error(`${selectedCard.card_company} 연동 ID가 없습니다. 금융 연동 마스터에서 먼저 카드사 연동을 해주세요.`);
+        return;
+      }
+
+      // 2. 최근 3개월 기간 설정
+      const now = new Date();
+      const threeMonthsAgo = new Date(now);
+      threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+      const startDate = format(threeMonthsAgo, "yyyyMMdd");
+      const endDate = format(now, "yyyyMMdd");
+
+      // 3. CODEF API 호출
+      const { data, error } = await supabase.functions.invoke("codef-api", {
+        body: {
+          action: "card_transaction_list",
+          tenantId: currentTenant.tenant_id,
+          connectedId: configData.config_value,
+          organization: orgCode,
+          startDate,
+          endDate,
+          orderBy: "0",
+          cardNo: selectedCard.card_number || undefined,
+        },
+      });
+
+      if (error) throw error;
+      if (data?.result?.code !== "CF-00000") {
+        throw new Error(data?.result?.message || "CODEF API 오류");
+      }
+
+      // 4. 결과를 card_transactions에 저장
+      const resList = data?.data?.resTrHistoryList || data?.data?.resCardHistoryList || [];
+      if (resList.length === 0) {
+        toast.info("조회된 카드 사용 내역이 없습니다.");
+        return;
+      }
+
+      let insertCount = 0;
+      for (const item of resList) {
+        const txDate = item.resUsedDate || item.resTranDate || "";
+        const txTime = item.resUsedTime || "";
+        const dateStr = txDate
+          ? `${txDate.slice(0, 4)}-${txDate.slice(4, 6)}-${txDate.slice(6, 8)}T${txTime.slice(0, 2) || "00"}:${txTime.slice(2, 4) || "00"}:00`
+          : new Date().toISOString();
+
+        const amount = Math.abs(Number(item.resUsedAmount || item.resTranAmount || 0));
+        const merchantName = item.resStoreName || item.resMemberStoreName || item.resStoreBizNo || "알 수 없음";
+
+        // 중복 체크 (같은 카드, 날짜, 금액, 가맹점)
+        const { data: existing } = await supabase
+          .from("card_transactions")
+          .select("id")
+          .eq("card_id", selectedCard.id)
+          .eq("amount", amount)
+          .eq("merchant_name", merchantName)
+          .gte("transaction_date", dateStr.split("T")[0])
+          .lte("transaction_date", dateStr.split("T")[0] + "T23:59:59")
+          .limit(1);
+
+        if (existing && existing.length > 0) continue;
+
+        await supabase.from("card_transactions").insert({
+          card_id: selectedCard.id,
+          transaction_date: dateStr,
+          merchant_name: merchantName,
+          amount,
+          category: item.resCategory || null,
+          status: "pending",
+          memo: item.resInstallmentCount && item.resInstallmentCount !== "0"
+            ? `할부 ${item.resInstallmentCount}개월`
+            : null,
+        });
+        insertCount++;
+      }
+
+      toast.success(`${insertCount}건의 새로운 카드 내역을 가져왔습니다.`);
+      fetchTransactions();
+    } catch (e: any) {
+      console.error("CODEF sync error:", e);
+      toast.error("내역 가져오기 실패: " + e.message);
+    } finally {
+      setSyncing(false);
+    }
   };
 
   if (loading) {
@@ -282,6 +395,16 @@ const MyCardExpenses = () => {
                     variant="outline"
                     size="sm"
                     className="gap-2"
+                    onClick={handleSyncFromCodef}
+                    disabled={!selectedCardId || syncing}
+                  >
+                    <RefreshCw className={`w-4 h-4 ${syncing ? "animate-spin" : ""}`} />
+                    {syncing ? "가져오는 중..." : "CODEF 내역 가져오기"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
                     onClick={() => setAddDialogOpen(true)}
                     disabled={!selectedCardId}
                   >
@@ -318,7 +441,7 @@ const MyCardExpenses = () => {
                     {transactions.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">
-                          사용 내역이 없습니다. '수동 등록' 버튼으로 내역을 추가하세요.
+                          사용 내역이 없습니다. 'CODEF 내역 가져오기' 버튼으로 카드사에서 내역을 불러오세요.
                         </TableCell>
                       </TableRow>
                     ) : (
