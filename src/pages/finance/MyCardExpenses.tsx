@@ -239,7 +239,7 @@ const MyCardExpenses = () => {
           : new Date().toISOString();
 
         const amount = Math.abs(Number(item.resUsedAmount || item.resTranAmount || item.resApprovalAmount || 0));
-        const merchantName = item.resStoreName || item.resMemberStoreName || item.resStoreBizNo || "알 수 없음";
+        const merchantName = item.resMemberStoreName || item.resStoreName || item.resStoreBizNo || "알 수 없음";
 
         // 중복 체크
         const { data: existing } = await supabase
