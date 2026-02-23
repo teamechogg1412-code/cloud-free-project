@@ -1,1 +1,4 @@
 project_id = "zxwfatefsilpjasrwcdi"
+
+[functions.codef-card-sync]
+verify_jwt = false
