@@ -224,7 +224,7 @@ const MyCardExpenses = () => {
       }
 
       // 4. 결과를 card_transactions에 저장
-      const resList = data?.data?.resTrHistoryList || data?.data?.resApprovalList || data?.data?.resCardHistoryList || [];
+      const resList = Array.isArray(data?.data) ? data.data : (data?.data?.resTrHistoryList || data?.data?.resApprovalList || []);
       if (resList.length === 0) {
         toast.info("조회된 카드 사용 내역이 없습니다.");
         return;
