@@ -172,9 +172,9 @@ serve(async (req) => {
 
       result = await parseSafeJSON(response);
 
-    } else if (action === "card_transaction_list") {
-      // ─── 신규: 카드 이용내역 조회 ───
-      const { connectedId, organization, startDate, endDate, orderBy, cardNo } = body;
+    } else if (action === "card_approval_list") {
+      // ─── 카드 승인내역 조회 (approval-list) ───
+      const { connectedId, organization, startDate, endDate, orderBy, cardNo, inquiryType, memberStoreInfoType } = body;
 
       if (!connectedId) throw new Error("connectedId가 필요합니다.");
 
@@ -184,11 +184,13 @@ serve(async (req) => {
         startDate: startDate || "",
         endDate: endDate || "",
         orderBy: orderBy || "0",
+        inquiryType: inquiryType || "1",
+        memberStoreInfoType: memberStoreInfoType || "3",
       };
       if (cardNo) parameter.cardNo = cardNo;
 
-      const endpoint = "/v1/kr/card/b/account/transaction-list";
-      console.log(`카드내역 조회: ${organization} / ${cardNo || "전체"}`);
+      const endpoint = "/v1/kr/card/b/account/approval-list";
+      console.log(`카드 승인내역 조회: ${organization} / ${cardNo || "전체"}`);
 
       const response = await fetch(BASE_URL + endpoint, {
         method: "POST",

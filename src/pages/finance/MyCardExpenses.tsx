@@ -193,13 +193,15 @@ const MyCardExpenses = () => {
       // 3. CODEF API 호출
       const { data, error } = await supabase.functions.invoke("codef-api", {
         body: {
-          action: "card_transaction_list",
+          action: "card_approval_list",
           tenantId: currentTenant.tenant_id,
           connectedId: configData.config_value,
           organization: orgCode,
           startDate,
           endDate,
           orderBy: "0",
+          inquiryType: "1",
+          memberStoreInfoType: "3",
           cardNo: selectedCard.card_number || undefined,
         },
       });
@@ -210,7 +212,7 @@ const MyCardExpenses = () => {
       }
 
       // 4. 결과를 card_transactions에 저장
-      const resList = data?.data?.resTrHistoryList || data?.data?.resCardHistoryList || [];
+      const resList = data?.data?.resTrHistoryList || data?.data?.resCardHistoryList || data?.data?.resApprovalList || [];
       if (resList.length === 0) {
         toast.info("조회된 카드 사용 내역이 없습니다.");
         return;
