@@ -193,13 +193,15 @@ const MyCardExpenses = () => {
       // 3. CODEF API 호출
       const { data, error } = await supabase.functions.invoke("codef-api", {
         body: {
-          action: "card_transaction_list",
+          action: "card_approval_list",
           tenantId: currentTenant.tenant_id,
           connectedId: configData.config_value,
           organization: orgCode,
           startDate,
           endDate,
           orderBy: "0",
+          inquiryType: "1",
+          memberStoreInfoType: "3",
           cardNo: selectedCard.card_number || undefined,
         },
       });
