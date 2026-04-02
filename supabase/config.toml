@@ -1,0 +1,49 @@
+project_id = "matcnptzugnaisuhowbk"
+
+[functions.manage-system-config]
+verify_jwt = false
+
+[functions.codef-card-sync]
+verify_jwt = false
+
+[functions.sync-standard-folders]
+verify_jwt = false
+
+[functions.sync-schedule-to-calendar]
+verify_jwt = false
+
+[functions.create-employee]
+verify_jwt = false
+
+[functions.send-invitation-email]
+verify_jwt = false
+
+[functions.create-work-folder]
+verify_jwt = false
+
+[functions.auto-expense-report]
+verify_jwt = false
+
+[functions.analyze-scenario]
+verify_jwt = false
+
+[functions.analyze-contract]
+verify_jwt = false
+
+[functions.generate-press]
+verify_jwt = false
+
+[functions.extract-invoice]
+verify_jwt = false
+
+[functions.calculate-driving-distance]
+verify_jwt = false
+
+[functions.kakao-address-search]
+verify_jwt = false
+
+[functions.telegram-webhook]
+verify_jwt = false
+
+[functions.telegram-alerts]
+verify_jwt = false
