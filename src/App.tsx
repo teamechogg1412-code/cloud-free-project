@@ -101,13 +101,17 @@ import DrivingSettlement from "./pages/finance/DrivingSettlement";
 
 const queryClient = new QueryClient();
 
+/** GitHub Pages 등 하위 경로 배포 시 Vite `base`와 동일하게 맞춤 */
+const routerBasename =
+  import.meta.env.BASE_URL.replace(/\/$/, "") || undefined;
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
       <TooltipProvider>
         <Toaster />
         <Sonner position="top-center" />
-        <BrowserRouter>
+        <BrowserRouter basename={routerBasename}>
           <Routes>
             {/* 1. 공개 경로 (누구나 접근 가능) */}
             <Route path="/" element={<Index />} />
